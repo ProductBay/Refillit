@@ -1,0 +1,23 @@
+# Dependencies
+**/node_modules/
+
+# Local environment
+**/.env
+**/.env.*
+
+# Build output
+**/dist/
+
+# Logs and temp artifacts
+**/*.log
+**/*.out
+**/*.err
+**/*.tmp
+**/*.cache
+**/_*.txt
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
