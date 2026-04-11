@@ -1,6 +1,13 @@
 const express = require("express");
 const { requireAuth } = require("../middleware/auth");
-const { User } = require("../models");
+const {
+  User,
+  DoctorProfile,
+  PatientProfile,
+  PharmacyProfile,
+  NhfProfile,
+  CourierProfile,
+} = require("../models");
 const { normalizeEmail } = require("../utils/crypto");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const { signAccessToken } = require("../utils/jwt");
@@ -34,6 +41,34 @@ router.post("/register", async (req, res, next) => {
             })
           : undefined,
     });
+
+    if (user.role === "doctor") {
+      await DoctorProfile.findOrCreate({
+        where: { userId: user.id },
+        defaults: { userId: user.id, mohVerified: false, clinicInfo: {} },
+      });
+    } else if (user.role === "patient") {
+      await PatientProfile.findOrCreate({
+        where: { userId: user.id },
+        defaults: { userId: user.id },
+      });
+    } else if (user.role === "pharmacy") {
+      await PharmacyProfile.findOrCreate({
+        where: { userId: user.id },
+        defaults: { userId: user.id, registeredName: fullName },
+      });
+    } else if (user.role === "nhf") {
+      await NhfProfile.findOrCreate({
+        where: { userId: user.id },
+        defaults: { userId: user.id },
+      });
+    } else if (user.role === "courier") {
+      await CourierProfile.findOrCreate({
+        where: { userId: user.id },
+        defaults: { userId: user.id },
+      });
+    }
+
     await writeAudit({
       actorUserId: user.id,
       action: "auth.register",

@@ -3714,39 +3714,65 @@ export default function DispatchHub({ mode = "auto" }) {
       {/* Courier acknowledgment modal: must accept when courier logs in */}
       {showCourierUI && !courierAckAccepted ? (
         <div className="modal-backdrop" role="presentation">
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="courierAckTitle">
-            <div>
-              <h2 id="courierAckTitle">Important: Responsible Medication Delivery</h2>
-              <p>
+          <div
+            className="modal courier-ack-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="courierAckTitle"
+          >
+            <div className="courier-ack-modal__hero">
+              <span className="courier-ack-modal__eyebrow">Courier clearance</span>
+              <h2 id="courierAckTitle">Responsible medication delivery</h2>
+              <p className="courier-ack-modal__lead">
                 Delivering medications is a sensitive and important responsibility. As the courier you must
                 take care to confirm the recipient identity, follow the delivery instructions precisely,
                 protect patient privacy, and escalate any safety or verification issues immediately.
               </p>
-              <p>
-                By accepting below you acknowledge that you understand the seriousness of handling and
-                delivering prescription medications and agree to follow the required checklist and
-                verification procedures on every delivery.
-              </p>
             </div>
-            <div className="form-row">
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  try {
-                    // If courier declines, log them out to prevent further actions
-                    if (typeof window !== "undefined") {
-                      localStorage.removeItem(`courier_ack_${String(user?.id || "anon")}`);
-                    }
-                  } catch (_e) {}
-                  if (typeof window !== "undefined") window.location.href = "/auth";
-                }}
-              >
-                Decline and logout
-              </button>
-              <button type="button" className="primary" onClick={acceptCourierAcknowledgement}>
-                I Accept and Understand
-              </button>
+            <div className="courier-ack-modal__body">
+              <div className="courier-ack-modal__checklist">
+                <div className="courier-ack-modal__check">
+                  <strong>Verify identity</strong>
+                  <span>Match the recipient with the assigned patient or approved handoff contact.</span>
+                </div>
+                <div className="courier-ack-modal__check">
+                  <strong>Protect privacy</strong>
+                  <span>Keep patient details private and avoid discussing medication in public settings.</span>
+                </div>
+                <div className="courier-ack-modal__check">
+                  <strong>Escalate risk fast</strong>
+                  <span>Pause delivery and report any safety, fraud, or verification issue immediately.</span>
+                </div>
+              </div>
+              <p className="courier-ack-modal__note">
+                By accepting below you confirm that you understand the seriousness of handling prescription
+                medications and agree to follow the required checklist and verification procedures on every
+                delivery.
+              </p>
+              <div className="form-row courier-ack-modal__actions">
+                <button
+                  type="button"
+                  className="ghost courier-ack-modal__decline"
+                  onClick={() => {
+                    try {
+                      // If courier declines, log them out to prevent further actions
+                      if (typeof window !== "undefined") {
+                        localStorage.removeItem(`courier_ack_${String(user?.id || "anon")}`);
+                      }
+                    } catch (_e) {}
+                    if (typeof window !== "undefined") window.location.href = "/auth";
+                  }}
+                >
+                  Decline and logout
+                </button>
+                <button
+                  type="button"
+                  className="primary courier-ack-modal__accept"
+                  onClick={acceptCourierAcknowledgement}
+                >
+                  I Accept and Understand
+                </button>
+              </div>
             </div>
           </div>
         </div>

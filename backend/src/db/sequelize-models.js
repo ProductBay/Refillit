@@ -26,6 +26,9 @@ const DoctorProfile = sequelize.define(
     licenseNumber: DataTypes.STRING,
     mohVerified: DataTypes.BOOLEAN,
     clinicInfo: DataTypes.JSONB,
+    specialty: DataTypes.STRING,
+    issuingBody: DataTypes.STRING,
+    metadata: DataTypes.JSONB,
   },
   { tableName: "doctor_profiles", timestamps: true }
 );
@@ -44,6 +47,13 @@ const PatientProfile = sequelize.define(
     trnHash: DataTypes.STRING,
     weightKg: DataTypes.DECIMAL,
     weightLbs: DataTypes.DECIMAL,
+    allergies: DataTypes.JSONB,
+    conditions: DataTypes.JSONB,
+    emergencyContactName: DataTypes.TEXT,
+    emergencyContactPhone: DataTypes.TEXT,
+    insuranceProvider: DataTypes.TEXT,
+    insurancePolicyNumber: DataTypes.TEXT,
+    nhfNumber: DataTypes.TEXT,
   },
   { tableName: "patient_profiles", timestamps: true }
 );
@@ -59,6 +69,10 @@ const PharmacyProfile = sequelize.define(
     town: DataTypes.STRING,
     pharmacists: DataTypes.JSONB,
     branches: DataTypes.JSONB,
+    address: DataTypes.TEXT,
+    pharmacistInCharge: DataTypes.STRING,
+    registryUrl: DataTypes.TEXT,
+    metadata: DataTypes.JSONB,
   },
   { tableName: "pharmacy_profiles", timestamps: true }
 );
@@ -179,9 +193,60 @@ const GenericJson = (name, table) =>
     { tableName: table, timestamps: true }
   );
 
-const DoctorConnection = GenericJson("DoctorConnection", "doctor_connections");
-const DoctorReceptionAccess = GenericJson("DoctorReceptionAccess", "doctor_reception_access");
-const AppointmentAvailability = GenericJson("AppointmentAvailability", "appointment_availability");
+const DoctorConnection = sequelize.define(
+  "DoctorConnection",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    status: DataTypes.STRING,
+    source: DataTypes.STRING,
+    approvedAt: DataTypes.DATE,
+    declinedAt: DataTypes.DATE,
+    notes: DataTypes.TEXT,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "doctor_connections", timestamps: true }
+);
+
+const DoctorReceptionAccess = sequelize.define(
+  "DoctorReceptionAccess",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    receptionistId: DataTypes.UUID,
+    status: DataTypes.STRING,
+    canViewDemographics: DataTypes.BOOLEAN,
+    canViewAppointments: DataTypes.BOOLEAN,
+    canViewPrivateNotes: DataTypes.BOOLEAN,
+    canViewPrescriptions: DataTypes.BOOLEAN,
+    grantedByUserId: DataTypes.UUID,
+    revokedByUserId: DataTypes.UUID,
+    notes: DataTypes.TEXT,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "doctor_reception_access", timestamps: true }
+);
+
+const AppointmentAvailability = sequelize.define(
+  "AppointmentAvailability",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    startAt: DataTypes.DATE,
+    endAt: DataTypes.DATE,
+    mode: DataTypes.STRING,
+    location: DataTypes.TEXT,
+    maxBookings: DataTypes.INTEGER,
+    feeRequired: DataTypes.BOOLEAN,
+    feeAmount: DataTypes.DECIMAL,
+    feeCurrency: DataTypes.STRING,
+    isActive: DataTypes.BOOLEAN,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "appointment_availability", timestamps: true }
+);
 const Appointment = sequelize.define(
   "Appointment",
   {
@@ -195,21 +260,241 @@ const Appointment = sequelize.define(
   { tableName: "appointments", timestamps: true }
 );
 
-const DoctorPrescriptionTemplate = GenericJson("DoctorPrescriptionTemplate", "doctor_prescription_templates");
-const DoctorFavoriteMed = GenericJson("DoctorFavoriteMed", "doctor_favorite_meds");
+const DoctorPrescriptionTemplate = sequelize.define(
+  "DoctorPrescriptionTemplate",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    name: DataTypes.STRING,
+    diagnosis: DataTypes.STRING,
+    meds: DataTypes.JSONB,
+    allowedRefills: DataTypes.INTEGER,
+    notes: DataTypes.TEXT,
+  },
+  { tableName: "doctor_prescription_templates", timestamps: true }
+);
+
+const DoctorFavoriteMed = sequelize.define(
+  "DoctorFavoriteMed",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    ndcCode: DataTypes.STRING,
+    name: DataTypes.STRING,
+    strength: DataTypes.STRING,
+    qty: DataTypes.INTEGER,
+    allowedRefills: DataTypes.INTEGER,
+    medicationType: DataTypes.STRING,
+    usedFor: DataTypes.TEXT,
+    controlledSubstance: DataTypes.BOOLEAN,
+  },
+  { tableName: "doctor_favorite_meds", timestamps: true }
+);
+
 const AppointmentWaitlist = GenericJson("AppointmentWaitlist", "appointment_waitlist");
-const Referral = GenericJson("Referral", "referrals");
-const PharmacyIntervention = GenericJson("PharmacyIntervention", "pharmacy_interventions");
+
+const Referral = sequelize.define(
+  "Referral",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    doctorId: DataTypes.UUID,
+    referralReference: DataTypes.STRING,
+    referralType: DataTypes.STRING,
+    targetName: DataTypes.STRING,
+    targetSpecialty: DataTypes.STRING,
+    targetContact: DataTypes.STRING,
+    reason: DataTypes.TEXT,
+    clinicalQuestion: DataTypes.TEXT,
+    requestedByDate: DataTypes.STRING,
+    priority: DataTypes.STRING,
+    status: DataTypes.STRING,
+    attachmentUrls: DataTypes.JSONB,
+    statusTimeline: DataTypes.JSONB,
+  },
+  { tableName: "referrals", timestamps: true }
+);
+
+const PharmacyIntervention = sequelize.define(
+  "PharmacyIntervention",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    pharmacyId: DataTypes.UUID,
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    orderId: DataTypes.STRING,
+    interventionType: DataTypes.STRING,
+    details: DataTypes.TEXT,
+    suggestedAlternative: DataTypes.JSONB,
+    severity: DataTypes.STRING,
+    status: DataTypes.STRING,
+    resolvedAt: DataTypes.DATE,
+    resolvedBy: DataTypes.UUID,
+    resolutionNote: DataTypes.TEXT,
+  },
+  { tableName: "pharmacy_interventions", timestamps: true }
+);
+
 const SharedCareNote = GenericJson("SharedCareNote", "shared_care_notes");
-const SoapNote = GenericJson("SoapNote", "soap_notes");
+
+const SoapNote = sequelize.define(
+  "SoapNote",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    subjective: DataTypes.TEXT,
+    objective: DataTypes.TEXT,
+    assessment: DataTypes.TEXT,
+    plan: DataTypes.TEXT,
+    diagnosisCodes: DataTypes.JSONB,
+    procedureCodes: DataTypes.JSONB,
+    signature: DataTypes.TEXT,
+    signedBy: DataTypes.UUID,
+    signedAt: DataTypes.DATE,
+    locked: DataTypes.BOOLEAN,
+  },
+  { tableName: "soap_notes", timestamps: true }
+);
+
 const ConsentRecord = GenericJson("ConsentRecord", "consent_records");
-const CareInstructionBroadcast = GenericJson("CareInstructionBroadcast", "care_instruction_broadcasts");
-const RefillRequest = GenericJson("RefillRequest", "refill_requests");
-const PatientMedicationReminder = GenericJson("PatientMedicationReminder", "patient_medication_reminders");
-const PatientVisitPrepItem = GenericJson("PatientVisitPrepItem", "patient_visit_prep_items");
-const PatientCareTask = GenericJson("PatientCareTask", "patient_care_tasks");
-const PatientProxyAccess = GenericJson("PatientProxyAccess", "patient_proxy_access");
-const InstallmentProposal = GenericJson("InstallmentProposal", "installment_proposals");
+
+const CareInstructionBroadcast = sequelize.define(
+  "CareInstructionBroadcast",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    language: DataTypes.STRING,
+    text: DataTypes.TEXT,
+    cohort: DataTypes.STRING,
+    deliveredAt: DataTypes.DATE,
+    readAt: DataTypes.DATE,
+    escalatedAt: DataTypes.DATE,
+    contact: DataTypes.STRING,
+    escalationLevel: DataTypes.INTEGER,
+  },
+  { tableName: "care_instruction_broadcasts", timestamps: true }
+);
+
+const RefillRequest = sequelize.define(
+  "RefillRequest",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    doctorId: DataTypes.UUID,
+    prescId: DataTypes.STRING,
+    reason: DataTypes.TEXT,
+    status: DataTypes.STRING,
+    decidedAt: DataTypes.DATE,
+    decisionNotes: DataTypes.TEXT,
+  },
+  { tableName: "refill_requests", timestamps: true }
+);
+
+const PatientMedicationReminder = sequelize.define(
+  "PatientMedicationReminder",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    title: DataTypes.STRING,
+    note: DataTypes.TEXT,
+    dosage: DataTypes.STRING,
+    timeOfDay: DataTypes.STRING,
+    frequency: DataTypes.STRING,
+    active: DataTypes.BOOLEAN,
+    lastAction: DataTypes.STRING,
+    lastActionAt: DataTypes.DATE,
+  },
+  { tableName: "patient_medication_reminders", timestamps: true }
+);
+
+const PatientVisitPrepItem = sequelize.define(
+  "PatientVisitPrepItem",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    text: DataTypes.TEXT,
+    category: DataTypes.STRING,
+    visitDate: DataTypes.STRING,
+    symptomName: DataTypes.STRING,
+    symptomExplanation: DataTypes.TEXT,
+    symptomSeverity: DataTypes.STRING,
+    occurredAt: DataTypes.DATE,
+    sharedWithDoctor: DataTypes.BOOLEAN,
+    sharedDoctorId: DataTypes.UUID,
+    sharedAt: DataTypes.DATE,
+    sharedForVirtualDiagnosis: DataTypes.BOOLEAN,
+    sharedNote: DataTypes.TEXT,
+    reviewedByDoctorAt: DataTypes.DATE,
+    reviewedByDoctorId: DataTypes.UUID,
+    doctorReviewNote: DataTypes.TEXT,
+    completed: DataTypes.BOOLEAN,
+  },
+  { tableName: "patient_visit_prep_items", timestamps: true }
+);
+
+const PatientCareTask = sequelize.define(
+  "PatientCareTask",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    text: DataTypes.TEXT,
+    dueDate: DataTypes.STRING,
+    source: DataTypes.STRING,
+    completed: DataTypes.BOOLEAN,
+    completedAt: DataTypes.DATE,
+  },
+  { tableName: "patient_care_tasks", timestamps: true }
+);
+
+const PatientProxyAccess = sequelize.define(
+  "PatientProxyAccess",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    proxyUserId: DataTypes.UUID,
+    relationship: DataTypes.STRING,
+    phone: DataTypes.STRING,
+    idType: DataTypes.STRING,
+    idNumber: DataTypes.TEXT,
+    idNumberMasked: DataTypes.STRING,
+    organizationName: DataTypes.STRING,
+    verificationStatus: DataTypes.STRING,
+    verificationVerifiedAt: DataTypes.DATE,
+    verificationNote: DataTypes.TEXT,
+    active: DataTypes.BOOLEAN,
+    canViewEmergencyCard: DataTypes.BOOLEAN,
+    canRequestRefills: DataTypes.BOOLEAN,
+    canBookAppointments: DataTypes.BOOLEAN,
+    notes: DataTypes.TEXT,
+  },
+  { tableName: "patient_proxy_access", timestamps: true }
+);
+
+const InstallmentProposal = sequelize.define(
+  "InstallmentProposal",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    appointmentId: DataTypes.STRING,
+    patientId: DataTypes.UUID,
+    doctorId: DataTypes.UUID,
+    proposedByUserId: DataTypes.UUID,
+    proposedByRole: DataTypes.STRING,
+    installments: DataTypes.INTEGER,
+    amountEach: DataTypes.DECIMAL,
+    totalAmount: DataTypes.DECIMAL,
+    currency: DataTypes.STRING,
+    startDate: DataTypes.STRING,
+    status: DataTypes.STRING,
+    reviewNote: DataTypes.TEXT,
+    reviewedByUserId: DataTypes.UUID,
+    reviewedByRole: DataTypes.STRING,
+    reviewedAt: DataTypes.DATE,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "installment_proposals", timestamps: true }
+);
 const ComplianceReportSnapshot = sequelize.define(
   "ComplianceReportSnapshot",
   { id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 }, label: DataTypes.STRING, pharmacyId: DataTypes.UUID, signedBy: DataTypes.UUID, signedAt: DataTypes.DATE, checksum: DataTypes.STRING, signature: DataTypes.JSONB, summary: DataTypes.JSONB, events: DataTypes.JSONB, mohSubmission: DataTypes.JSONB },
@@ -251,9 +536,57 @@ const MohClinicalCatalogEntry = sequelize.define(
   { tableName: "moh_clinical_catalog_entries", timestamps: true }
 );
 
-const PaymentIntent = GenericJson("PaymentIntent", "payment_intents");
-const WalletLedger = GenericJson("WalletLedger", "wallet_ledger");
-const NhfCreditLedger = GenericJson("NhfCreditLedger", "nhf_credit_ledger");
+const PaymentIntent = sequelize.define(
+  "PaymentIntent",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    prescId: DataTypes.STRING,
+    paymentScope: DataTypes.STRING,
+    pharmacyId: DataTypes.UUID,
+    method: DataTypes.STRING,
+    currency: DataTypes.STRING,
+    refillAmount: DataTypes.DECIMAL,
+    subtotal: DataTypes.DECIMAL,
+    deliveryFee: DataTypes.DECIMAL,
+    totalAmount: DataTypes.DECIMAL,
+    allocations: DataTypes.JSONB,
+    otcItems: DataTypes.JSONB,
+    status: DataTypes.STRING,
+    orderId: DataTypes.STRING,
+    authorizedAt: DataTypes.DATE,
+    paidAt: DataTypes.DATE,
+  },
+  { tableName: "payment_intents", timestamps: true }
+);
+
+const WalletLedger = sequelize.define(
+  "WalletLedger",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    amount: DataTypes.DECIMAL,
+    currency: DataTypes.STRING,
+    type: DataTypes.STRING,
+    reason: DataTypes.STRING,
+    paymentIntentId: DataTypes.UUID,
+  },
+  { tableName: "wallet_ledger", timestamps: true }
+);
+
+const NhfCreditLedger = sequelize.define(
+  "NhfCreditLedger",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    patientId: DataTypes.UUID,
+    amount: DataTypes.DECIMAL,
+    currency: DataTypes.STRING,
+    type: DataTypes.STRING,
+    reason: DataTypes.STRING,
+    paymentIntentId: DataTypes.UUID,
+  },
+  { tableName: "nhf_credit_ledger", timestamps: true }
+);
 
 const EntityRegistration = GenericJson("EntityRegistration", "entity_registrations");
 

@@ -13,7 +13,7 @@ const port = Number(process.env.PORT || 4000);
 
 const startServer = async () => {
   try {
-    initModels();
+    await initModels();
     await sequelize.authenticate();
     await runMigrations();
     if (process.env.NODE_ENV !== "test" && process.env.AUTO_SEED_DEMO !== "false") {

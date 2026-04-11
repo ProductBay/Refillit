@@ -5,6 +5,13 @@ const AuthContext = createContext(null);
 
 const STORAGE_KEY = "refillit_auth";
 
+const resolveApiBase = () => {
+  const configured = String(import.meta.env.VITE_API_BASE || "").trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  if (import.meta.env.DEV) return "http://127.0.0.1:4000";
+  return "";
+};
+
 const loadStored = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -30,7 +37,7 @@ export function AuthProvider({ children }) {
     companyName: "Refillit",
   });
 
-  const apiBase = import.meta.env.VITE_API_BASE || "http://127.0.0.1:4000";
+  const apiBase = resolveApiBase();
 
   const setAuth = (next) => {
     const value = {
