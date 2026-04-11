@@ -14,6 +14,9 @@ const User = sequelize.define(
     mohRole: DataTypes.STRING,
     passwordHash: DataTypes.STRING,
     platformStaffId: DataTypes.STRING,
+    createdByDoctorId: DataTypes.UUID,
+    nhfLocked: DataTypes.BOOLEAN,
+    mohLocked: DataTypes.BOOLEAN,
   },
   { tableName: "users", timestamps: true }
 );
@@ -251,11 +254,57 @@ const Appointment = sequelize.define(
   "Appointment",
   {
     id: { type: DataTypes.STRING, primaryKey: true },
+    availabilityId: DataTypes.UUID,
     patientId: DataTypes.UUID,
     doctorId: DataTypes.UUID,
+    startAt: DataTypes.DATE,
+    endAt: DataTypes.DATE,
+    mode: DataTypes.STRING,
+    location: DataTypes.TEXT,
+    reason: DataTypes.TEXT,
+    triageTags: DataTypes.JSONB,
+    source: DataTypes.STRING,
+    status: DataTypes.STRING,
+    arrivalStatus: DataTypes.STRING,
+    arrivedAt: DataTypes.DATE,
+    checkedInAt: DataTypes.DATE,
+    checkedInBy: DataTypes.UUID,
+    inRoomAt: DataTypes.DATE,
+    completedAt: DataTypes.DATE,
+    reminderChannel: DataTypes.STRING,
+    reminderDefault24h: DataTypes.BOOLEAN,
+    reminderCustomAlertAt: DataTypes.DATE,
+    reminderDefaultSentAt: DataTypes.DATE,
+    reminderCustomSentAt: DataTypes.DATE,
+    reminderLastSentAt: DataTypes.DATE,
+    reminderHistory: DataTypes.JSONB,
+    doctorAlerts: DataTypes.JSONB,
+    feeRequired: DataTypes.BOOLEAN,
     feeAmount: DataTypes.DECIMAL,
+    feeCurrency: DataTypes.STRING,
+    consultationFee: DataTypes.DECIMAL,
+    additionalCharges: DataTypes.DECIMAL,
     nhfDeductionAmount: DataTypes.DECIMAL,
+    nhfReference: DataTypes.STRING,
+    paymentStatus: DataTypes.STRING,
     paymentCollectedAmount: DataTypes.DECIMAL,
+    paymentMethod: DataTypes.STRING,
+    paymentReference: DataTypes.STRING,
+    paymentCollectedAt: DataTypes.DATE,
+    paymentCollectedBy: DataTypes.UUID,
+    paymentNotes: DataTypes.TEXT,
+    paymentHistory: DataTypes.JSONB,
+    paymentDueDate: DataTypes.DATE,
+    billingReadyForCollection: DataTypes.BOOLEAN,
+    billingReadyAt: DataTypes.DATE,
+    visitChargeUpdatedAt: DataTypes.DATE,
+    visitChargeUpdatedBy: DataTypes.UUID,
+    receptionHandoffAt: DataTypes.DATE,
+    receptionHandoffBy: DataTypes.UUID,
+    receptionHandoffNote: DataTypes.TEXT,
+    receptionUpdatedAt: DataTypes.DATE,
+    receptionUpdatedBy: DataTypes.UUID,
+    receptionNote: DataTypes.TEXT,
   },
   { tableName: "appointments", timestamps: true }
 );
@@ -660,7 +709,7 @@ const DemoNdaAcceptance = sequelize.define(
 
 const initModels = async () => {
   await sequelize.authenticate();
-  await sequelize.sync();
+  await sequelize.sync({ alter: true });
   return true;
 };
 
