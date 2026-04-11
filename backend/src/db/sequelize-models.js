@@ -1,5 +1,12 @@
+const { randomUUID } = require("crypto");
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("./sequelize");
+
+const stringPrimaryKey = (prefix) => ({
+  type: DataTypes.STRING,
+  primaryKey: true,
+  defaultValue: () => `${prefix}_${randomUUID()}`,
+});
 
 // Define models with minimal fields needed for seeded/demo flows.
 const User = sequelize.define(
@@ -95,7 +102,7 @@ const CourierProfile = sequelize.define(
 const Prescription = sequelize.define(
   "Prescription",
   {
-    id: { type: DataTypes.STRING, primaryKey: true },
+    id: stringPrimaryKey("rx"),
     patientId: DataTypes.UUID,
     doctorId: DataTypes.UUID,
     meds: DataTypes.JSONB,
@@ -107,7 +114,7 @@ const Prescription = sequelize.define(
 const Order = sequelize.define(
   "Order",
   {
-    id: { type: DataTypes.STRING, primaryKey: true },
+    id: stringPrimaryKey("ord"),
     patientId: DataTypes.UUID,
     prescId: DataTypes.STRING,
     pharmacyId: DataTypes.UUID,
@@ -133,7 +140,7 @@ const Order = sequelize.define(
 const NhfClaim = sequelize.define(
   "NhfClaim",
   {
-    id: { type: DataTypes.STRING, primaryKey: true },
+    id: stringPrimaryKey("claim"),
     patientId: DataTypes.UUID,
     prescId: DataTypes.STRING,
     orderId: DataTypes.STRING,
@@ -154,7 +161,7 @@ const NhfClaim = sequelize.define(
 const NhfDispute = sequelize.define(
   "NhfDispute",
   {
-    id: { type: DataTypes.STRING, primaryKey: true },
+    id: stringPrimaryKey("dispute"),
     claimId: DataTypes.STRING,
     reason: DataTypes.TEXT,
     status: DataTypes.STRING,
@@ -172,19 +179,51 @@ const AuditLog = sequelize.define(
 
 const ChatThread = sequelize.define(
   "ChatThread",
-  { id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 }, metadata: DataTypes.JSONB },
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    pharmacyId: DataTypes.UUID,
+    participants: DataTypes.JSONB,
+    threadType: DataTypes.STRING,
+    doctorLastReadAt: DataTypes.DATE,
+    patientLastReadAt: DataTypes.DATE,
+    pharmacyLastReadAt: DataTypes.DATE,
+    readBy: DataTypes.JSONB,
+    lastMessageAt: DataTypes.DATE,
+    lastMessageText: DataTypes.TEXT,
+    lastMessageSenderId: DataTypes.UUID,
+    metadata: DataTypes.JSONB,
+  },
   { tableName: "chat_threads", timestamps: true }
 );
 
 const ChatMessage = sequelize.define(
   "ChatMessage",
-  { id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 }, threadId: DataTypes.UUID, authorId: DataTypes.UUID, body: DataTypes.TEXT, meta: DataTypes.JSONB },
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    threadId: DataTypes.UUID,
+    senderId: DataTypes.UUID,
+    message: DataTypes.TEXT,
+    authorId: DataTypes.UUID,
+    body: DataTypes.TEXT,
+    meta: DataTypes.JSONB,
+  },
   { tableName: "chat_messages", timestamps: true }
 );
 
 const DoctorPrivateNote = sequelize.define(
   "DoctorPrivateNote",
-  { id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 }, userId: DataTypes.UUID, body: DataTypes.TEXT },
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    text: DataTypes.TEXT,
+    tags: DataTypes.JSONB,
+    visibility: DataTypes.STRING,
+    userId: DataTypes.UUID,
+    body: DataTypes.TEXT,
+  },
   { tableName: "doctor_private_notes", timestamps: true }
 );
 
@@ -253,7 +292,7 @@ const AppointmentAvailability = sequelize.define(
 const Appointment = sequelize.define(
   "Appointment",
   {
-    id: { type: DataTypes.STRING, primaryKey: true },
+    id: stringPrimaryKey("appt"),
     availabilityId: DataTypes.UUID,
     patientId: DataTypes.UUID,
     doctorId: DataTypes.UUID,
@@ -340,7 +379,22 @@ const DoctorFavoriteMed = sequelize.define(
   { tableName: "doctor_favorite_meds", timestamps: true }
 );
 
-const AppointmentWaitlist = GenericJson("AppointmentWaitlist", "appointment_waitlist");
+const AppointmentWaitlist = sequelize.define(
+  "AppointmentWaitlist",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    status: DataTypes.STRING,
+    preferredDate: DataTypes.DATE,
+    reason: DataTypes.TEXT,
+    triageTags: DataTypes.JSONB,
+    bookedAppointmentId: DataTypes.STRING,
+    bookedAt: DataTypes.DATE,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "appointment_waitlist", timestamps: true }
+);
 
 const Referral = sequelize.define(
   "Referral",
@@ -384,7 +438,19 @@ const PharmacyIntervention = sequelize.define(
   { tableName: "pharmacy_interventions", timestamps: true }
 );
 
-const SharedCareNote = GenericJson("SharedCareNote", "shared_care_notes");
+const SharedCareNote = sequelize.define(
+  "SharedCareNote",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    text: DataTypes.TEXT,
+    visibilityRoles: DataTypes.JSONB,
+    tags: DataTypes.JSONB,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "shared_care_notes", timestamps: true }
+);
 
 const SoapNote = sequelize.define(
   "SoapNote",
@@ -406,7 +472,21 @@ const SoapNote = sequelize.define(
   { tableName: "soap_notes", timestamps: true }
 );
 
-const ConsentRecord = GenericJson("ConsentRecord", "consent_records");
+const ConsentRecord = sequelize.define(
+  "ConsentRecord",
+  {
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    doctorId: DataTypes.UUID,
+    patientId: DataTypes.UUID,
+    consentType: DataTypes.STRING,
+    grantedAt: DataTypes.DATE,
+    expiresAt: DataTypes.DATE,
+    status: DataTypes.STRING,
+    notes: DataTypes.TEXT,
+    metadata: DataTypes.JSONB,
+  },
+  { tableName: "consent_records", timestamps: true }
+);
 
 const CareInstructionBroadcast = sequelize.define(
   "CareInstructionBroadcast",

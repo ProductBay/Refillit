@@ -155,7 +155,17 @@ export default function Layout() {
       <nav className="nav">
         <div className="brand nav-brand">
           <img src="/logo.png" alt="Refillit" className="platform-logo" />
-          <span style={{ marginLeft: 8 }}></span>
+          <div className="country-badge" aria-label="St Kitts and Nevis demo">
+            <img
+              src="/st-kitts-nevis-flag.gif"
+              alt="St Kitts and Nevis flag"
+              className="country-badge__flag"
+            />
+            <div className="country-badge__copy">
+              <span className="country-badge__eyebrow">Demo Region</span>
+              <span className="country-badge__name">St Kitts &amp; Nevis</span>
+            </div>
+          </div>
         </div>
         <div className="nav-links">
           {visibleLinks.map(({ to, label }) => (
@@ -315,12 +325,12 @@ export default function Layout() {
             Founder, Lead Developer & Architect: Ashandie Powell
           </div>
           <div className="platform-footer__meta">
-            Assistant Developers: Zachary Anderson & Akedo Powell
+            Assistant Architect for St Kitts & Nevis: Mr Quasim Walker
           </div>
           <div className="platform-footer__meta">
             Developed in partnership with {" "}
             <a className="platform-footer__anchor" href="https://a-dash-technology.vercel.app/" target="_blank" rel="noreferrer">
-              A'Dash Technologies
+              A'Dash Technologies Clean-Rite
             </a>
           </div>
           <div className="platform-footer__meta">
