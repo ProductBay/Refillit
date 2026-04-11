@@ -16,6 +16,11 @@ const canonicalize = (obj) =>
 const signPayload = (core) =>
   crypto.createHmac("sha256", secret()).update(canonicalize(core)).digest("hex");
 
+const toCompactPrescriptionLink = ({ prescId, linkCode }) => {
+  if (!prescId || !linkCode) return "";
+  return `refillit://link/${prescId}/${linkCode}`;
+};
+
 const buildPrescriptionQrPayload = (prescription) => {
   const core = {
     type: "refillit_prescription_v1",
@@ -38,8 +43,14 @@ const buildPrescriptionQrPayload = (prescription) => {
   return { ...core, sig: signPayload(core) };
 };
 
-const generatePrescriptionQrDataUrl = async (payload) =>
-  QRCode.toDataURL(JSON.stringify(payload), { margin: 1, errorCorrectionLevel: "M" });
+const generatePrescriptionQrDataUrl = async (payload) => {
+  const compactContent = toCompactPrescriptionLink(payload);
+  const rawContent = compactContent || JSON.stringify(payload);
+  return QRCode.toDataURL(rawContent, {
+    margin: 1,
+    errorCorrectionLevel: compactContent ? "H" : "M",
+  });
+};
 
 const parsePrescriptionQr = (raw) => {
   const value = String(raw || "").trim();
@@ -69,4 +80,5 @@ module.exports = {
   buildPrescriptionQrPayload,
   generatePrescriptionQrDataUrl,
   parsePrescriptionQr,
+  toCompactPrescriptionLink,
 };

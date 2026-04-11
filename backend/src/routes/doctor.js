@@ -37,6 +37,7 @@ const {
   buildPrescriptionQrPayload,
   generatePrescriptionQrDataUrl,
   parsePrescriptionQr,
+  toCompactPrescriptionLink,
 } = require("../utils/prescriptionQr");
 
 const router = express.Router();
@@ -3324,8 +3325,10 @@ router.post(
         linked: false,
       });
       const qrPayload = buildPrescriptionQrPayload(prescription);
+      const qrContent = toCompactPrescriptionLink(qrPayload) || JSON.stringify(qrPayload);
       const qrDataUrl = await generatePrescriptionQrDataUrl(qrPayload);
       prescription.qrPayload = qrPayload;
+      prescription.qrContent = qrContent;
       prescription.qrDataUrl = qrDataUrl;
       await prescription.save();
       await writeAudit({
@@ -3352,6 +3355,7 @@ router.post(
         },
         linkCode,
         qrPayload,
+        qrContent,
         qrDataUrl,
         patientShare: {
           contact: body.patientContact || patient.email || null,
