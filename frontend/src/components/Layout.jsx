@@ -330,7 +330,11 @@ export default function Layout() {
           <div className="platform-footer__meta">
             Developed in partnership with {" "}
             <a className="platform-footer__anchor" href="https://a-dash-technology.vercel.app/" target="_blank" rel="noreferrer">
-              A'Dash Technologies Clean-Rite
+              A'Dash Technologies
+            </a>
+            {" & "}
+            <a className="platform-footer__anchor" href="https://cleanrite-now.com/" target="_blank" rel="noreferrer">
+              Clean-Rite
             </a>
           </div>
           <div className="platform-footer__meta">

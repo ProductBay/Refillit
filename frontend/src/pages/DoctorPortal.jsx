@@ -133,6 +133,7 @@ export default function DoctorPortal() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [isSymptomReportModalOpen, setIsSymptomReportModalOpen] = useState(false);
   const [isPatientRecordModalOpen, setIsPatientRecordModalOpen] = useState(false);
+  const [selectedPrescriptionHistoryEntry, setSelectedPrescriptionHistoryEntry] = useState(null);
   const [loadingPatientRecordId, setLoadingPatientRecordId] = useState("");
   const [loadingSymptomReportId, setLoadingSymptomReportId] = useState("");
   const [activeSymptomReport, setActiveSymptomReport] = useState(null);
@@ -334,6 +335,11 @@ export default function DoctorPortal() {
   const [kpi, setKpi] = useState(null);
   const [refillRequests, setRefillRequests] = useState([]);
   const [patientAudit, setPatientAudit] = useState([]);
+
+  const openPrescriptionHistoryEntry = (entry) => {
+    if (!entry) return;
+    setSelectedPrescriptionHistoryEntry(entry);
+  };
   const scannerRef = useRef(null);
   const scannerControlsRef = useRef(null);
   const doctorScannerVideoRef = useRef(null);
@@ -5858,14 +5864,19 @@ export default function DoctorPortal() {
                 {(record.prescriptions || []).length ? (
                   <div className="note-list">
                     {record.prescriptions.map((entry) => (
-                      <div className="note-item" key={entry.id}>
+                      <button
+                        type="button"
+                        className="note-item doctor-history-trigger"
+                        key={entry.id}
+                        onClick={() => openPrescriptionHistoryEntry(entry)}
+                      >
                         <div className="meta">{entry.id}</div>
                         <div className="note-text">
                           {(entry.meds || []).map((med) => med.name).join(", ")}
                           {" | Refill amount: "}
                           {Number(entry.allowedRefills || 0)}
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -6596,6 +6607,22 @@ export default function DoctorPortal() {
         </button>
       ) : null}
 
+      <button
+        type="button"
+        className={`doctor-chat-fab doctor-chat-fab--prescription${
+          activeModule === "prescriptions" ? " is-active" : ""
+        }`}
+        aria-label="Open create prescription workspace"
+        onClick={() => {
+          navigate("/doctor/prescriptions");
+          if (!selectedPatient?.id) {
+            setStatus("Select a patient to create a prescription.");
+          }
+        }}
+      >
+        Create Prescription
+      </button>
+
       {isPatientRecordModalOpen ? (
         <>
           <button
@@ -6662,9 +6689,14 @@ export default function DoctorPortal() {
                     <div className="modal-list-item">
                       <strong>Recent Prescriptions</strong>
                       {(record.prescriptions || []).slice(0, 5).map((entry) => (
-                        <div key={entry.id} className="meta">
+                        <button
+                          key={entry.id}
+                          type="button"
+                          className="doctor-history-inline-link"
+                          onClick={() => openPrescriptionHistoryEntry(entry)}
+                        >
                           {entry.id} | Refill amount: {Number(entry.allowedRefills || 0)}
-                        </div>
+                        </button>
                       ))}
                       {!record.prescriptions?.length ? <div className="meta">No prescriptions yet.</div> : null}
                     </div>
@@ -6852,6 +6884,87 @@ export default function DoctorPortal() {
                       </button>
                     </div>
                   </section>
+                </div>
+              </div>
+            </article>
+          </div>
+        </>
+      ) : null}
+
+      {selectedPrescriptionHistoryEntry ? (
+        <>
+          <button
+            type="button"
+            className="modal-scrim"
+            aria-label="Close prescription details"
+            onClick={() => setSelectedPrescriptionHistoryEntry(null)}
+          />
+          <div className="modal-backdrop" role="dialog" aria-modal="true">
+            <article className="modal prescription-detail-modal">
+              <header className="modal-header">
+                <div>
+                  <h3>Prescription Reference</h3>
+                  <div className="meta">{selectedPrescriptionHistoryEntry.id}</div>
+                </div>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setSelectedPrescriptionHistoryEntry(null)}
+                >
+                  Close
+                </button>
+              </header>
+              <div className="modal-body">
+                <div className="modal-list">
+                  <div className="modal-list-item">
+                    <strong>Prescription Summary</strong>
+                    <div className="prescription-detail-grid">
+                      <div className="meta">
+                        <strong>ID:</strong> {selectedPrescriptionHistoryEntry.id}
+                      </div>
+                      <div className="meta">
+                        <strong>Refill amount:</strong> {Number(selectedPrescriptionHistoryEntry.allowedRefills || 0)}
+                      </div>
+                      <div className="meta">
+                        <strong>Issued:</strong>{" "}
+                        {selectedPrescriptionHistoryEntry.createdAt
+                          ? new Date(selectedPrescriptionHistoryEntry.createdAt).toLocaleString()
+                          : "N/A"}
+                      </div>
+                      <div className="meta">
+                        <strong>Expiry:</strong>{" "}
+                        {selectedPrescriptionHistoryEntry.expiryDate
+                          ? new Date(selectedPrescriptionHistoryEntry.expiryDate).toLocaleDateString()
+                          : "N/A"}
+                      </div>
+                      <div className="meta">
+                        <strong>Linked:</strong> {selectedPrescriptionHistoryEntry.linked ? "Yes" : "No"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="modal-list-item">
+                    <strong>Medications</strong>
+                    {(selectedPrescriptionHistoryEntry.meds || []).length ? (
+                      <div className="prescription-detail-med-list">
+                        {selectedPrescriptionHistoryEntry.meds.map((med, idx) => (
+                          <div className="note-item" key={`${med.ndcCode || med.name || "med"}-${idx}`}>
+                            <div className="queue-title">{med.name || "Unnamed medication"}</div>
+                            <div className="meta">
+                              Strength: {med.strength || "N/A"} | Qty: {med.qty ?? "N/A"}
+                            </div>
+                            {med.ndcCode ? <div className="meta">Code: {med.ndcCode}</div> : null}
+                            {med.usedFor ? <div className="meta">Used for: {med.usedFor}</div> : null}
+                            {med.medicationType ? (
+                              <div className="meta">Type: {med.medicationType}</div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="meta">No medication details stored for this prescription.</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </article>
