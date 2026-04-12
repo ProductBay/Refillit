@@ -1340,7 +1340,7 @@ router.get(
       const remaining = Math.max(0, maxBookings - booked);
       if (remaining > 0) {
         availability.push({
-          ...slot,
+          ...(typeof slot?.toJSON === "function" ? slot.toJSON() : slot),
           remaining,
         });
       }

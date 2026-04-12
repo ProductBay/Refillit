@@ -2200,7 +2200,10 @@ router.get(
       const maxBookings = Number(slot.maxBookings || 1);
       const remaining = Math.max(0, maxBookings - booked);
       if (remaining > 0) {
-        availability.push({ ...slot, remaining });
+        availability.push({
+          ...(typeof slot?.toJSON === "function" ? slot.toJSON() : slot),
+          remaining,
+        });
       }
     }
     availability.sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
@@ -2342,7 +2345,7 @@ router.get("/appointments/bookings", requireAuth, requireRoles(PATIENT_CARE_CONT
     // eslint-disable-next-line no-await-in-loop
     const doctor = await User.findByPk(entry.doctorId);
     bookings.push({
-      ...entry,
+      ...(typeof entry?.toJSON === "function" ? entry.toJSON() : entry),
       doctorName: doctor?.fullName || null,
     });
   }

@@ -2717,7 +2717,7 @@ router.get(
       // eslint-disable-next-line no-await-in-loop
       const patient = await User.findByPk(entry.patientId);
       bookings.push({
-        ...entry,
+        ...(typeof entry?.toJSON === "function" ? entry.toJSON() : entry),
         patientName: patient?.fullName || null,
         patientEmail: patient?.email || null,
         reminder: getReminderSummary(entry),
