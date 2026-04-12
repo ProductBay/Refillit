@@ -329,9 +329,6 @@ export default function Layout() {
             Founder, Lead Developer & Architect: Ashandie Powell
           </div>
           <div className="platform-footer__meta">
-            Assistant Architect for St Kitts & Nevis: Mr Quasim Walker
-          </div>
-          <div className="platform-footer__meta">
             Developed in partnership with {" "}
             <a className="platform-footer__anchor" href="https://a-dash-technology.vercel.app/" target="_blank" rel="noreferrer">
               A'Dash Technologies

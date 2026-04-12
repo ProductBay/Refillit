@@ -394,6 +394,21 @@ export default function DoctorPortal() {
     }
   };
 
+  const copyPrescriptionLinkCode = async (entry) => {
+    const value = String(entry?.linkCode || "").trim();
+    if (!value) {
+      setError("No prescription link code available to copy.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(`Prescription link code copied for ${entry.id}.`);
+      setError("");
+    } catch (_err) {
+      setError("Unable to copy prescription link code.");
+    }
+  };
+
   const stopDoctorScan = () => {
     if (scannerControlsRef.current) {
       scannerControlsRef.current.stop();
@@ -6942,6 +6957,15 @@ export default function DoctorPortal() {
                       </div>
                       <div className="meta">
                         <strong>Link code:</strong> {maskLinkCode(selectedPrescriptionHistoryEntry.linkCode)}
+                      </div>
+                      <div className="meta">
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() => copyPrescriptionLinkCode(selectedPrescriptionHistoryEntry)}
+                        >
+                          Copy full link code
+                        </button>
                       </div>
                       <div className="meta">
                         <strong>Issued:</strong>{" "}

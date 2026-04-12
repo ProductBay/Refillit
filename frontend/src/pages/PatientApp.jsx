@@ -122,6 +122,8 @@ export default function PatientApp() {
   const [trackingData, setTrackingData] = useState(null);
   const [fallbackCodeVisible, setFallbackCodeVisible] = useState(false);
   const [fallbackCodeRemainingSec, setFallbackCodeRemainingSec] = useState(0);
+  const [revealedPrescriptionId, setRevealedPrescriptionId] = useState("");
+  const [revealedPrescriptionSeconds, setRevealedPrescriptionSeconds] = useState(0);
   const [deliveryPreferenceForm, setDeliveryPreferenceForm] = useState({
     instructions: "",
     recipientName: "",
@@ -1445,6 +1447,29 @@ export default function PatientApp() {
     }
   };
 
+  const revealPrescriptionCode = (prescriptionId) => {
+    if (!prescriptionId) return;
+    setRevealedPrescriptionId(prescriptionId);
+    setRevealedPrescriptionSeconds(FALLBACK_CODE_REVEAL_SECONDS);
+    setStatus("Prescription link code revealed for 20 seconds.");
+    setError("");
+  };
+
+  const copyPrescriptionCode = async (entry) => {
+    const value = String(entry?.linkCode || "").trim();
+    if (!value) {
+      setError("No link code available for this prescription.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setStatus(`Prescription link code copied for ${entry.id}.`);
+      setError("");
+    } catch (_err) {
+      setError("Unable to copy link code. Please reveal and copy manually.");
+    }
+  };
+
   const loadMedicationReminders = async () => {
     if (isCaregiverSession) {
       setMedicationReminders([]);
@@ -2126,6 +2151,19 @@ export default function PatientApp() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [fallbackCodeVisible, fallbackCodeRemainingSec]);
+
+  useEffect(() => {
+    if (!revealedPrescriptionId || revealedPrescriptionSeconds <= 0) {
+      if (revealedPrescriptionId && revealedPrescriptionSeconds <= 0) {
+        setRevealedPrescriptionId("");
+      }
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setRevealedPrescriptionSeconds((current) => Math.max(0, Number(current || 0) - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [revealedPrescriptionId, revealedPrescriptionSeconds]);
 
   return (
     <section className="panel patient-shell">
@@ -3271,23 +3309,58 @@ export default function PatientApp() {
                       <div className="queue-meta">
                         Link code: {maskLinkCode(entry.linkCode)}
                       </div>
+                      {revealedPrescriptionId === entry.id ? (
+                        <div className="patient-otp-fallback">
+                          <div className="meta">Temporary reveal for manual linking:</div>
+                          <div className="patient-otp-fallback__reveal">
+                            <code>{entry.linkCode || "Not available"}</code>
+                            <button
+                              className="ghost"
+                              type="button"
+                              onClick={() => {
+                                setRevealedPrescriptionId("");
+                                setRevealedPrescriptionSeconds(0);
+                              }}
+                            >
+                              Hide now
+                            </button>
+                            <span className="meta">Auto-hide in {revealedPrescriptionSeconds}s</span>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     {entry.qrDataUrl ? (
                       <div className="qr-panel">
                         <img className="qr-image" src={entry.qrDataUrl} alt={`QR ${entry.id}`} />
                       </div>
                     ) : null}
-                    <button
-                      className="ghost"
-                      type="button"
-                      onClick={() => {
-                        setPrescId(entry.id);
-                        setLinkCode(entry.linkCode || "");
-                        scrollToSection("prescription");
-                      }}
-                    >
-                      Use this prescription
-                    </button>
+                    <div className="form-row">
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => revealPrescriptionCode(entry.id)}
+                      >
+                        Reveal code
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => copyPrescriptionCode(entry)}
+                      >
+                        Copy code
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => {
+                          setPrescId(entry.id);
+                          setLinkCode(entry.linkCode || "");
+                          scrollToSection("prescription");
+                        }}
+                      >
+                        Use this prescription
+                      </button>
+                    </div>
                   </article>
                 ))}
                 {!prescriptions.length ? <div className="meta">No prescriptions linked yet.</div> : null}
