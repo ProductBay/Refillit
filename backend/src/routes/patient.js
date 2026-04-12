@@ -683,11 +683,22 @@ router.post(
   requireAuth,
   requireRoles(["patient"]),
   async (req, res) => {
+    const normalizeLinkCode = (value) =>
+      String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "")
+        .replace(/O/g, "0")
+        .replace(/I/g, "1")
+        .replace(/L/g, "1");
+
     const prescription = await Prescription.findByPk(req.params.id);
     if (!prescription) {
       return res.status(404).json({ error: "Prescription not found" });
     }
-    if ((req.body || {}).code !== prescription.linkCode) {
+    const submittedCode = normalizeLinkCode((req.body || {}).code);
+    const storedCode = normalizeLinkCode(prescription.linkCode);
+    if (!submittedCode || submittedCode !== storedCode) {
       return res.status(400).json({ error: "Invalid link code" });
     }
     prescription.patientId = req.user.id;

@@ -43,6 +43,14 @@ const {
 const router = express.Router();
 
 const randomCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+const generateLinkCode = (length = 6) => {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let value = "";
+  for (let index = 0; index < length; index += 1) {
+    value += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return value;
+};
 const REMINDER_CHANNELS = new Set(["email", "whatsapp", "sms"]);
 const RECEPTION_SCOPE_KEYS = [
   "canViewDemographics",
@@ -3305,7 +3313,7 @@ router.post(
           warnings,
         });
       }
-      const linkCode = randomCode();
+      const linkCode = generateLinkCode();
       const prescription = await Prescription.create({
         doctorId: req.user.id,
         doctorName,

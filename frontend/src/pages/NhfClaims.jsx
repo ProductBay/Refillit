@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const money = (value) => Number(value || 0).toFixed(2);
 const formatTimelineTime = (value) => {
@@ -1695,8 +1696,14 @@ export default function NhfClaims() {
           Submit NHF claim
         </button>
       </div>
-      {message ? <p className="notice">{message}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={message}
+        errorMessage={error}
+        onClose={() => {
+          setMessage("");
+          setError("");
+        }}
+      />
     </section>
   );
 }

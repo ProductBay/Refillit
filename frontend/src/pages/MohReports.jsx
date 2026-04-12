@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const FILTER_PRESET_KEY = "refillit_moh_registry_filters";
 const OPS_CHECKLIST_KEY = "refillit_moh_ops_checklist";
@@ -2765,7 +2766,10 @@ export default function MohReports() {
           </>
         ) : null}
       </div>
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        errorMessage={error}
+        onClose={() => setError("")}
+      />
         </main>
       </div>
     </section>

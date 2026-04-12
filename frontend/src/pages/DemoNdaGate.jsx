@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const roleHome = (role) => {
   if (role === "doctor") return "/doctor/dashboard";
@@ -99,8 +100,14 @@ export default function DemoNdaGate() {
           {saving ? "Accepting..." : "Accept & Continue"}
         </button>
       </div>
-      {error ? <p className="notice error">{error}</p> : null}
-      {success ? <p className="notice">{success}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={success}
+        errorMessage={error}
+        onClose={() => {
+          setSuccess("");
+          setError("");
+        }}
+      />
     </section>
   );
 }

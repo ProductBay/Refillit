@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 export default function PharmacyQueue() {
   const { apiBase, token, user } = useAuth();
@@ -2048,8 +2049,14 @@ export default function PharmacyQueue() {
         </div>
       </div>
       ) : null}
-      {message ? <p className="notice">{message}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={message}
+        errorMessage={error}
+        onClose={() => {
+          setMessage("");
+          setError("");
+        }}
+      />
       </div>
       </div>
     </section>

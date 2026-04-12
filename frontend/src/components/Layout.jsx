@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "./GlobalFeedbackOverlay.jsx";
 
 const links = [
   { to: "/", label: "Home" },
@@ -305,13 +306,16 @@ export default function Layout() {
                       Send
                     </button>
                   </div>
-                  {chatError ? <p className="notice error">{chatError}</p> : null}
                 </section>
               </div>
             </div>
           ) : null}
         </div>
       ) : null}
+      <GlobalFeedbackOverlay
+        errorMessage={chatError}
+        onClose={() => setChatError("")}
+      />
       <footer className="platform-footer">
         <div className="platform-footer__section">
           <div className="platform-footer__brand">
@@ -333,8 +337,8 @@ export default function Layout() {
               A'Dash Technologies
             </a>
             {" & "}
-            <a className="platform-footer__anchor" href="https://cleanrite-now.com/" target="_blank" rel="noreferrer">
-              Clean-Rite
+            <a className="platform-footer__anchor" href="https://ritesupplies.com/" target="_blank" rel="noreferrer">
+              Rite-Supplies
             </a>
           </div>
           <div className="platform-footer__meta">

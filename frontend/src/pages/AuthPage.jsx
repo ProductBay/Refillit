@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 export default function AuthPage() {
   const { apiBase, setAuth } = useAuth();
@@ -36,6 +37,8 @@ export default function AuthPage() {
     courierGovernmentId: "",
     courierAddress: "",
   });
+  const overlayStatus =
+    status === "Submitting..." || status === "Submitting onboarding request..." ? "" : status;
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -203,8 +206,14 @@ export default function AuthPage() {
           Request onboarding (doctor/pharmacy/courier)
         </button>
       </div>
-      {status ? <p className="meta">{status}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={overlayStatus}
+        errorMessage={error}
+        onClose={() => {
+          setStatus("");
+          setError("");
+        }}
+      />
       {showOnboardingModal ? (
         <div className="modal-backdrop" role="presentation">
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="onboardingModalTitle">

@@ -3,6 +3,7 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
 import LocalQrCode from "../components/LocalQrCode.jsx";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const maskLinkCode = (value) => {
   const raw = String(value || "").trim();
@@ -4140,8 +4141,14 @@ export default function PatientApp() {
               </article>
             </div>
           ) : null}
-          {status ? <p className="notice">{status}</p> : null}
-          {error ? <p className="notice error">{error}</p> : null}
+          <GlobalFeedbackOverlay
+            successMessage={status}
+            errorMessage={error}
+            onClose={() => {
+              setStatus("");
+              setError("");
+            }}
+          />
         </div>
       </div>
     </section>

@@ -3,6 +3,7 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CLINICAL_CATEGORY_MAP = {
@@ -6601,8 +6602,14 @@ export default function DoctorPortal() {
         </div>
       </div>
 
-      {status ? <p className="notice">{status}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={status}
+        errorMessage={error}
+        onClose={() => {
+          setStatus("");
+          setError("");
+        }}
+      />
 
       {activeModule === "chat" ? (
         <button

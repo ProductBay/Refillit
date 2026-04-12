@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 export default function AdminAccess() {
   const { apiBase, token, setAuth } = useAuth();
@@ -2002,8 +2003,14 @@ export default function AdminAccess() {
           </>
         ) : null}
       </div>
-      {notice ? <p className="notice">{notice}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={notice}
+        errorMessage={error}
+        onClose={() => {
+          setNotice("");
+          setError("");
+        }}
+      />
     </section>
   );
 }

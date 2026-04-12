@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const toDateKey = (value) => {
   if (!value) return "";
@@ -2085,8 +2086,14 @@ h2{font-size:14px;margin:18px 0 6px;color:#2d5a52}
         </article>
       </div>
 
-      {status ? <p className="notice">{status}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={status}
+        errorMessage={error}
+        onClose={() => {
+          setStatus("");
+          setError("");
+        }}
+      />
 
       {arrivalDetailsAppointment ? (
         <div className="modal-backdrop" role="presentation" onClick={closeArrivalDetailsModal}>

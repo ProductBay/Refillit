@@ -3,6 +3,7 @@ import { Circle, CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip
 import "leaflet/dist/leaflet.css";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
+import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
 const AUTO_LOCATION_MIN_INTERVAL_MS = 15000;
 
@@ -3709,8 +3710,14 @@ export default function DispatchHub({ mode = "auto" }) {
           {!timeline.length ? <div className="meta">No timeline events for selected order.</div> : null}
         </div>
       </div>
-      {message ? <p className="notice">{message}</p> : null}
-      {error ? <p className="notice error">{error}</p> : null}
+      <GlobalFeedbackOverlay
+        successMessage={message}
+        errorMessage={error}
+        onClose={() => {
+          setMessage("");
+          setError("");
+        }}
+      />
       {/* Courier acknowledgment modal: must accept when courier logs in */}
       {showCourierUI && !courierAckAccepted ? (
         <div className="modal-backdrop" role="presentation">
