@@ -2093,6 +2093,7 @@ router.get(
         id: entry.id,
         meds: entry.meds,
         allowedRefills: Number(entry.allowedRefills || 0),
+        linkCode: entry.linkCode || null,
         createdAt: entry.createdAt,
         expiryDate: entry.expiryDate,
         linked: entry.linked,

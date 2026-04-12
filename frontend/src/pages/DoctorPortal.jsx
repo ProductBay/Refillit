@@ -79,6 +79,14 @@ const formatMonthTitle = (monthDate) =>
     year: "numeric",
   });
 
+const maskLinkCode = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "Not available";
+  if (raw.length <= 2) return `${raw[0] || ""}•`;
+  if (raw.length <= 4) return `${raw.slice(0, 1)}${"•".repeat(Math.max(1, raw.length - 2))}${raw.slice(-1)}`;
+  return `${raw.slice(0, 2)}${"•".repeat(Math.max(2, raw.length - 4))}${raw.slice(-2)}`;
+};
+
 const toDateTimeInputValue = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -6924,6 +6932,9 @@ export default function DoctorPortal() {
                       </div>
                       <div className="meta">
                         <strong>Refill amount:</strong> {Number(selectedPrescriptionHistoryEntry.allowedRefills || 0)}
+                      </div>
+                      <div className="meta">
+                        <strong>Link code:</strong> {maskLinkCode(selectedPrescriptionHistoryEntry.linkCode)}
                       </div>
                       <div className="meta">
                         <strong>Issued:</strong>{" "}

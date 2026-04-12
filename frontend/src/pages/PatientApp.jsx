@@ -4,6 +4,14 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { apiFetch } from "../utils/api.js";
 import LocalQrCode from "../components/LocalQrCode.jsx";
 
+const maskLinkCode = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "Not available";
+  if (raw.length <= 2) return `${raw[0] || ""}•`;
+  if (raw.length <= 4) return `${raw.slice(0, 1)}${"•".repeat(Math.max(1, raw.length - 2))}${raw.slice(-1)}`;
+  return `${raw.slice(0, 2)}${"•".repeat(Math.max(2, raw.length - 4))}${raw.slice(-2)}`;
+};
+
 export default function PatientApp() {
   const FALLBACK_CODE_REVEAL_SECONDS = 20;
   const { apiBase, token, user } = useAuth();
@@ -3258,6 +3266,9 @@ export default function PatientApp() {
                       </div>
                       <div className="queue-meta">
                         Doctor: {entry.doctorName || "N/A"} ({entry.doctorId || "N/A"})
+                      </div>
+                      <div className="queue-meta">
+                        Link code: {maskLinkCode(entry.linkCode)}
                       </div>
                     </div>
                     {entry.qrDataUrl ? (
