@@ -107,6 +107,13 @@ const Prescription = sequelize.define(
     doctorId: DataTypes.UUID,
     meds: DataTypes.JSONB,
     diagnosis: DataTypes.STRING,
+    allowedRefills: DataTypes.INTEGER,
+    expiryDate: DataTypes.DATE,
+    controlledSubstanceJustification: DataTypes.TEXT,
+    linkCode: DataTypes.STRING,
+    linked: DataTypes.BOOLEAN,
+    qrDataUrl: DataTypes.TEXT,
+    qrPayload: DataTypes.JSONB,
   },
   { tableName: "prescriptions", timestamps: true }
 );
