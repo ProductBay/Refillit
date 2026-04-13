@@ -226,6 +226,17 @@ const normalizeDispatchStatus = (order) => {
   if (String(order?.deliveryOption || "").trim().toLowerCase() === "delivery") return "queued";
   return "none";
 };
+const isDeliveryOrderLike = (order) => {
+  if (!order) return false;
+  if (String(order?.deliveryOption || "").trim().toLowerCase() === "delivery") return true;
+  if (Boolean(order?.deliveryAddressSnapshot)) return true;
+  if (Boolean(order?.deliveryPreferences?.deliveryAddress || order?.deliveryPreferences?.instructions)) return true;
+  if (Boolean(order?.courierId)) return true;
+  if (Array.isArray(order?.dispatchTimeline) && order.dispatchTimeline.length > 0) return true;
+  const dispatchStatus = normalizeDispatchStatus(order);
+  if (dispatchStatus && dispatchStatus !== "none") return true;
+  return false;
+};
 
 const resolveDefaultPharmacyId = async () => {
   const seededPharmacy = await User.findOne({ where: { role: "pharmacy", email: "pharmacy@refillit.dev" } });
@@ -1818,7 +1829,7 @@ router.get("/orders", requireAuth, requireRoles(PATIENT_CARE_CONTEXT_ROLES), asy
   const rows = [];
 
   for (const order of orders) {
-    if (deliveryOnly && String(order.deliveryOption || "").toLowerCase() !== "delivery") continue;
+    if (deliveryOnly && !isDeliveryOrderLike(order)) continue;
     if (statusFilter && String(order.orderStatus || "").toLowerCase() !== statusFilter) continue;
     // eslint-disable-next-line no-await-in-loop
     const pharmacy = order.pharmacyId ? await User.findByPk(order.pharmacyId) : null;

@@ -653,6 +653,7 @@ export default function PatientApp() {
       { key: "overview", label: "Overview", badge: null },
       { key: "doctor", label: "Doctors & Visits", badge: connectedDoctorCount + referralCount },
       { key: "prescription", label: "Prescriptions", badge: prescriptions.length },
+      { key: "deliveries", label: "Deliveries", badge: patientOrders.length },
       { key: "chat", label: "Chat", badge: unreadDoctorMessages },
       { key: "care", label: "Care Tools", badge: pendingVisitPrepCount + openCareTaskCount },
       { key: "utilities", label: "Billing & Utilities", badge: openBalanceRows.length },
@@ -661,6 +662,7 @@ export default function PatientApp() {
       connectedDoctorCount,
       referralCount,
       prescriptions.length,
+      patientOrders.length,
       unreadDoctorMessages,
       pendingVisitPrepCount,
       openCareTaskCount,
@@ -2464,8 +2466,10 @@ export default function PatientApp() {
   }, [activeThreadId]);
 
   useEffect(() => {
-    if (activeTab !== "prescription") return undefined;
+    if (activeTab !== "deliveries") return undefined;
     if (!hasCarePermission("canRequestRefills")) return undefined;
+    loadPatientOrders();
+    if (trackingOrderId) loadOrderTracking(trackingOrderId);
     const timer = window.setInterval(() => {
       loadPatientOrders();
       if (trackingOrderId) {
@@ -3930,6 +3934,339 @@ export default function PatientApp() {
                   <div className="meta">No refill recommendations yet.</div>
                 ) : null}
               </div>
+            </article>
+          </div>
+        </section>
+        ) : null}
+
+        {activeTab === "deliveries" ? (
+        <section className="patient-section">
+          <div className="patient-section-header">
+            <div className="patient-section-title">
+              <span className="section-icon">DLV</span>
+              <h3>Delivery Tools And Tracking</h3>
+            </div>
+          </div>
+          <div className="patient-grid">
+            <article className="patient-card patient-card--wide">
+              <div className="doctor-card-header">
+                <h3>My Deliveries</h3>
+                <button className="ghost" type="button" onClick={loadPatientOrders}>
+                  Refresh deliveries
+                </button>
+              </div>
+              <div className="queue">
+                {patientOrders.map((entry) => (
+                  <article key={entry.id} className="queue-card patient-delivery-card">
+                    <div>
+                      <div className="queue-title">
+                        {entry.id} | {entry.dispatchStatus || "none"} | {entry.orderStatus || "submitted"}
+                      </div>
+                      <div className="patient-delivery-progress patient-delivery-progress--compact">
+                        <div className="patient-delivery-progress__header">
+                          <strong>{getDeliveryProgressModel(entry).headline}</strong>
+                          <span className="meta">{getDeliveryProgressModel(entry).progressPercent}%</span>
+                        </div>
+                        <div className="patient-delivery-progress__bar">
+                          <span
+                            className="patient-delivery-progress__fill"
+                            style={{ width: `${getDeliveryProgressModel(entry).progressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="queue-meta">
+                        Pharmacy: {entry.pharmacyName || entry.pharmacyId || "n/a"} | Courier:{" "}
+                        {entry.courierName || entry.courierId || "unassigned"}
+                      </div>
+                      <div className="queue-meta">
+                        ETA: {entry.dispatchEtaStart ? new Date(entry.dispatchEtaStart).toLocaleString() : "n/a"} -{" "}
+                        {entry.dispatchEtaEnd ? new Date(entry.dispatchEtaEnd).toLocaleString() : "n/a"}
+                      </div>
+                      <div className="queue-meta">
+                        Destination: {entry.destinationAddress || "Not provided yet"}
+                      </div>
+                      <div className="queue-meta">
+                        Instructions: {entry.deliveryInstructions || "No special instructions"}
+                      </div>
+                      {entry.dispatchFailureReason ? (
+                        <div className="queue-meta">Dispatch issue: {entry.dispatchFailureReason}</div>
+                      ) : null}
+                    </div>
+                    <div className="form-row">
+                      <button className="ghost" type="button" onClick={() => loadOrderTracking(entry.id)}>
+                        Track
+                      </button>
+                    </div>
+                  </article>
+                ))}
+                {!patientOrders.length ? <div className="meta">No delivery orders found yet.</div> : null}
+              </div>
+            </article>
+
+            <article className="patient-card patient-card--wide">
+              <div className="doctor-card-header">
+                <h3>Delivery Tracker</h3>
+                <span className="meta">
+                  Pharmacy preparation, courier handoff, and secure delivery proof all in one place.
+                </span>
+              </div>
+              {trackingData?.order ? (
+                <div className="notice patient-delivery-tracker">
+                  <strong>Tracking {trackingData.order.id}</strong>
+                  <br />
+                  Status: {trackingData.order.dispatchStatus || "none"} | Courier:{" "}
+                  {trackingData.order?.courier?.fullName || trackingData.order.courierName || "unassigned"}
+                  <br />
+                  <div className="patient-delivery-progress">
+                    <div className="patient-delivery-progress__header">
+                      <strong>{getDeliveryProgressModel(trackingData.order).headline}</strong>
+                      <span className="meta">
+                        {getDeliveryProgressModel(trackingData.order).progressPercent}% complete
+                      </span>
+                    </div>
+                    <div className="patient-delivery-progress__bar">
+                      <span
+                        className="patient-delivery-progress__fill"
+                        style={{ width: `${getDeliveryProgressModel(trackingData.order).progressPercent}%` }}
+                      />
+                    </div>
+                    <div className="patient-delivery-progress__steps">
+                      {getDeliveryProgressModel(trackingData.order).steps.map((step, index) => {
+                        const state =
+                          index < getDeliveryProgressModel(trackingData.order).currentIndex
+                            ? "done"
+                            : index === getDeliveryProgressModel(trackingData.order).currentIndex
+                              ? "active"
+                              : "pending";
+                        return (
+                          <div
+                            key={`deliveries-track-step-${step.key}`}
+                            className={`patient-delivery-progress__step patient-delivery-progress__step--${state}`}
+                          >
+                            <span className="patient-delivery-progress__step-dot" />
+                            <strong>{step.label}</strong>
+                            <span className="meta">{step.detail}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <br />
+                  OTP status:{" "}
+                  <span
+                    className={`patient-priority-badge patient-priority-badge--${otpStatusTone(
+                      trackingData.order.otpState
+                    )}`}
+                  >
+                    {formatOtpStatusLabel(trackingData.order.otpState)}
+                  </span>
+                  <br />
+                  <span className="meta">{formatOtpStatusHint(trackingData.order.otpState)}</span>
+                  <br />
+                  {trackingData.order.otpState?.status === "issued" && trackingData.order.otpState?.qrToken ? (
+                    <div className="patient-otp-qr-block">
+                      <strong>Show this QR to courier for secure handoff</strong>
+                      <div className="meta">Courier scans and OTP is auto-verified without speaking the code.</div>
+                      <LocalQrCode
+                        value={trackingData.order.otpState.qrToken}
+                        size={180}
+                        className="patient-otp-qr-svg"
+                        title="Delivery OTP QR"
+                      />
+                    </div>
+                  ) : null}
+                  {trackingData.order.otpState?.status === "issued" && trackingData.order.otpState?.fallbackCode ? (
+                    <div className="patient-otp-fallback">
+                      <strong>Fallback delivery code</strong>
+                      <div className="meta">Use this only if QR scan is unavailable:</div>
+                      {fallbackCodeVisible ? (
+                        <div className="patient-otp-fallback__reveal">
+                          <code>{trackingData.order.otpState.fallbackCode}</code>
+                          <button
+                            className="ghost"
+                            type="button"
+                            onClick={() => {
+                              setFallbackCodeVisible(false);
+                              setFallbackCodeRemainingSec(0);
+                            }}
+                          >
+                            Hide now
+                          </button>
+                          <span className="meta">Auto-hide in {fallbackCodeRemainingSec}s</span>
+                        </div>
+                      ) : (
+                        <button className="ghost" type="button" onClick={showFallbackCode}>
+                          Show code ({FALLBACK_CODE_REVEAL_SECONDS}s)
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                  <br />
+                  <div className="form">
+                    <label>
+                      Delivery instructions
+                      <input
+                        value={deliveryPreferenceForm.instructions}
+                        onChange={(e) =>
+                          setDeliveryPreferenceForm((current) => ({
+                            ...current,
+                            instructions: e.target.value,
+                          }))
+                        }
+                        placeholder="Gate code, landmark, best handoff note"
+                      />
+                    </label>
+                    <label>
+                      Recipient name
+                      <input
+                        value={deliveryPreferenceForm.recipientName}
+                        onChange={(e) =>
+                          setDeliveryPreferenceForm((current) => ({
+                            ...current,
+                            recipientName: e.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Recipient phone
+                      <input
+                        value={deliveryPreferenceForm.recipientPhone}
+                        onChange={(e) =>
+                          setDeliveryPreferenceForm((current) => ({
+                            ...current,
+                            recipientPhone: e.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Delivery address
+                      <input
+                        value={deliveryPreferenceForm.addressLine}
+                        onChange={(e) =>
+                          setDeliveryPreferenceForm((current) => ({
+                            ...current,
+                            addressLine: e.target.value,
+                          }))
+                        }
+                        placeholder="Street, community, landmark"
+                      />
+                    </label>
+                    <div className="form-row">
+                      <label>
+                        City
+                        <input
+                          value={deliveryPreferenceForm.city}
+                          onChange={(e) =>
+                            setDeliveryPreferenceForm((current) => ({
+                              ...current,
+                              city: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Parish
+                        <input
+                          value={deliveryPreferenceForm.parish}
+                          onChange={(e) =>
+                            setDeliveryPreferenceForm((current) => ({
+                              ...current,
+                              parish: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Postal code
+                        <input
+                          value={deliveryPreferenceForm.postalCode}
+                          onChange={(e) =>
+                            setDeliveryPreferenceForm((current) => ({
+                              ...current,
+                              postalCode: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="form-row">
+                      <label>
+                        Lat
+                        <input
+                          value={deliveryPreferenceForm.lat}
+                          onChange={(e) =>
+                            setDeliveryPreferenceForm((current) => ({
+                              ...current,
+                              lat: e.target.value,
+                            }))
+                          }
+                          placeholder="18.0179"
+                        />
+                      </label>
+                      <label>
+                        Lng
+                        <input
+                          value={deliveryPreferenceForm.lng}
+                          onChange={(e) =>
+                            setDeliveryPreferenceForm((current) => ({
+                              ...current,
+                              lng: e.target.value,
+                            }))
+                          }
+                          placeholder="-76.8099"
+                        />
+                      </label>
+                    </div>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={deliveryPreferenceForm.allowProxyReceive}
+                        onChange={(e) =>
+                          setDeliveryPreferenceForm((current) => ({
+                            ...current,
+                            allowProxyReceive: e.target.checked,
+                          }))
+                        }
+                      />
+                      Allow proxy/caregiver to receive
+                    </label>
+                    <div className="form-row">
+                      <button className="ghost" type="button" onClick={saveDeliveryPreferences}>
+                        Save delivery preferences
+                      </button>
+                    </div>
+                  </div>
+                  <div className="form-row">
+                    <input
+                      value={deliveryConfirmNote}
+                      onChange={(e) => setDeliveryConfirmNote(e.target.value)}
+                      placeholder="Optional delivery confirmation note"
+                    />
+                    <button className="primary" type="button" onClick={confirmDelivery}>
+                      Confirm delivery received
+                    </button>
+                  </div>
+                  <br />
+                  Timeline:
+                  <div className="queue patient-delivery-timeline">
+                    {(trackingData.timeline || []).map((event) => (
+                      <div key={event.id} className="patient-delivery-timeline__event">
+                        <div className="patient-delivery-timeline__dot" />
+                        <div>
+                          <div className="queue-title">{formatTrackingEventLabel(event)}</div>
+                          <div className="queue-meta">{new Date(event.at || Date.now()).toLocaleString()}</div>
+                          {event.detail ? <div className="queue-meta">{event.detail}</div> : null}
+                        </div>
+                      </div>
+                    ))}
+                    {!trackingData.timeline?.length ? <div className="queue-meta">No dispatch updates yet.</div> : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="meta">Select a delivery order to open the live tracker and handoff tools.</div>
+              )}
             </article>
           </div>
         </section>
