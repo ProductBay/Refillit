@@ -48,6 +48,10 @@ export default function PharmacyQueue() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [queueOrders, setQueueOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [courierRoster, setCourierRoster] = useState([]);
+  const [assignmentCourierId, setAssignmentCourierId] = useState("");
+  const [assignmentEtaStart, setAssignmentEtaStart] = useState("");
+  const [assignmentEtaEnd, setAssignmentEtaEnd] = useState("");
   const [statusValue, setStatusValue] = useState("processing");
   const [verificationNonce, setVerificationNonce] = useState("");
   const [dispenseTokenInput, setDispenseTokenInput] = useState("");
@@ -203,11 +207,121 @@ export default function PharmacyQueue() {
     return parts.join(" | ");
   };
 
+  const isDeliveryOrder = (order) => String(order?.deliveryOption || "").toLowerCase() === "delivery";
+
+  const getLifecycleLabel = (order) => {
+    const orderStatus = String(order?.orderStatus || "").toLowerCase();
+    const dispatchStatus = String(order?.dispatchStatus || "").toLowerCase();
+    if (dispatchStatus === "delivered" || orderStatus === "completed") return "Delivery completed";
+    if (dispatchStatus === "arrived") return "Courier arrived";
+    if (dispatchStatus === "picked_up") return "Picked up by courier";
+    if (dispatchStatus === "accepted") return "Courier accepted";
+    if (dispatchStatus === "assigned" || orderStatus === "assigned") return "Assigned to courier";
+    if (dispatchStatus === "queued" && orderStatus === "ready") return "Ready for courier assignment";
+    if (orderStatus === "ready") return isDeliveryOrder(order) ? "Ready for courier assignment" : "Ready for patient pickup";
+    if (orderStatus === "processing") return "Preparing order";
+    if (orderStatus === "failed") return "Order failed";
+    return "Awaiting pharmacy acceptance";
+  };
+
+  const getNextStatusActions = (order) => {
+    const orderStatus = String(order?.orderStatus || "").toLowerCase();
+    const dispatchStatus = String(order?.dispatchStatus || "").toLowerCase();
+    const delivery = isDeliveryOrder(order);
+    if (["completed", "failed"].includes(orderStatus)) return [];
+    if (orderStatus === "submitted") {
+      return [{ type: "status", value: "processing", label: "Accept order" }];
+    }
+    if (orderStatus === "processing") {
+      return [{ type: "status", value: "ready", label: delivery ? "Mark ready for dispatch" : "Mark ready for pickup" }];
+    }
+    if (orderStatus === "ready") {
+      if (delivery) {
+        if (!["assigned", "accepted", "picked_up", "arrived", "delivered"].includes(dispatchStatus)) {
+          return [{ type: "assign", label: "Assign courier" }];
+        }
+        return [];
+      }
+      return [{ type: "status", value: "completed", label: "Complete pickup order", requiresToken: true }];
+    }
+    return [];
+  };
+
+  const selectedOrderActions = useMemo(() => getNextStatusActions(selectedOrder), [selectedOrder]);
+
+  const buildOrderJourney = (order) => {
+    if (!order) return [];
+    const timeline = [
+      {
+        id: `${order.id}-created`,
+        at: order.createdAt || null,
+        label: "Order created",
+        detail: getLifecycleLabel({ ...order, orderStatus: "submitted", dispatchStatus: "none" }),
+      },
+    ];
+    const statusHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+    const statusLabels = {
+      submitted: "Order submitted",
+      processing: "Pharmacy accepted and started preparing",
+      ready: isDeliveryOrder(order) ? "Ready for courier handoff" : "Ready for patient pickup",
+      assigned: "Courier assignment confirmed",
+      completed: isDeliveryOrder(order) ? "Order marked completed" : "Pickup completed",
+      failed: "Order failed",
+    };
+    for (const entry of statusHistory) {
+      const status = String(entry?.status || "").toLowerCase();
+      timeline.push({
+        id: entry?.id || `${order.id}-status-${status}-${entry?.at || Math.random()}`,
+        at: entry?.at || null,
+        label: statusLabels[status] || `Status updated: ${status || "unknown"}`,
+        detail: entry?.by ? `Updated by ${entry.by}` : null,
+      });
+    }
+    const dispatchLabels = {
+      queued: "Queued for courier assignment",
+      assigned: "Courier assigned",
+      accepted: "Courier accepted job",
+      picked_up: "Order picked up",
+      arrived: "Courier arrived",
+      delivered: "Delivery completed",
+      failed: "Dispatch failed",
+      geofence_warning: "Delivery geofence warning",
+      auto_assigned: "Auto-assigned to courier",
+      batch_assigned: "Batch assigned to courier",
+    };
+    const dispatchTimeline = Array.isArray(order.dispatchTimeline) ? order.dispatchTimeline : [];
+    for (const entry of dispatchTimeline) {
+      const type = String(entry?.type || "").toLowerCase();
+      const meta = entry?.meta || {};
+      const detailParts = [];
+      if (meta.courierId) detailParts.push(`Courier ${meta.courierId}`);
+      if (meta.priority) detailParts.push(`Priority ${meta.priority}`);
+      if (meta.reason) detailParts.push(String(meta.reason));
+      timeline.push({
+        id: entry?.id || `${order.id}-dispatch-${type}-${entry?.at || Math.random()}`,
+        at: entry?.at || null,
+        label: dispatchLabels[type] || `Dispatch update: ${type || "unknown"}`,
+        detail: detailParts.join(" | ") || null,
+      });
+    }
+    return timeline
+      .filter((entry) => entry.at)
+      .sort((a, b) => new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime());
+  };
+
   const selectQueueOrder = (entry) => {
     if (!entry) return;
     setSelectedOrder(entry);
     setOrderId(entry.id);
     setVerificationNonce(entry.verificationNonce || "");
+    setAssignmentCourierId(entry.courierId || "");
+    setAssignmentEtaStart(entry.dispatchEtaStart ? String(entry.dispatchEtaStart).slice(0, 16) : "");
+    setAssignmentEtaEnd(entry.dispatchEtaEnd ? String(entry.dispatchEtaEnd).slice(0, 16) : "");
+    if (String(entry.orderStatus || "").toLowerCase() === "submitted") setStatusValue("processing");
+    if (String(entry.orderStatus || "").toLowerCase() === "processing") setStatusValue("ready");
+    if (String(entry.orderStatus || "").toLowerCase() === "ready" && !isDeliveryOrder(entry)) {
+      setStatusValue("completed");
+    }
     setInterventionForm((current) => ({
       ...current,
       orderId: entry.id,
@@ -410,8 +524,7 @@ export default function PharmacyQueue() {
       setMessage(`Order status: ${data.order.orderStatus}${data.idempotent ? " (idempotent)" : ""}`);
       setIdempotencyKey(key);
       setSelectedOrder(data.order || null);
-      await loadQueueOrders();
-      await loadComplianceEvents();
+      await Promise.all([loadQueueOrders(), loadComplianceEvents(), loadCourierWorkload()]);
     } catch (err) {
       setError(err.message);
     }
@@ -462,6 +575,91 @@ export default function PharmacyQueue() {
         path: `/api/pharmacy/orders/queue${query}`,
       });
       setQueueOrders(data.orders || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const triggerQuickStatus = async (nextStatus) => {
+    if (!selectedOrder?.id) {
+      setError("Select an order first.");
+      return;
+    }
+    setOrderId(selectedOrder.id);
+    setStatusValue(nextStatus);
+    try {
+      const key = `${selectedOrder.id}-${nextStatus}-${Date.now().toString(36)}`;
+      const data = await apiFetch({
+        apiBase,
+        token,
+        path: `/api/pharmacy/orders/${selectedOrder.id}/status`,
+        method: "POST",
+        body: {
+          status: nextStatus,
+          idempotencyKey: key,
+          verificationNonce: nextStatus === "ready" ? verificationNonce.trim() || undefined : undefined,
+          dispenseToken: nextStatus === "completed" ? dispenseTokenInput.trim() || undefined : undefined,
+          controlledChecklist: nextStatus === "ready" ? controlledChecklist.trim() || undefined : undefined,
+          useControlledOverride: nextStatus === "ready" ? useControlledOverride : undefined,
+          controlledOverride:
+            nextStatus === "ready" && useControlledOverride
+              ? {
+                  primarySignerId: controlledOverride.primarySignerId || user?.id || "",
+                  secondarySignerId: controlledOverride.secondarySignerId,
+                  justification: controlledOverride.justification,
+                  secondaryAuthCode: controlledOverride.secondaryAuthCode,
+                }
+              : undefined,
+        },
+      });
+      setMessage(`Order moved to ${data.order.orderStatus}.`);
+      setSelectedOrder(data.order || null);
+      await Promise.all([loadQueueOrders(), loadComplianceEvents(), loadCourierWorkload()]);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const assignCourierToOrder = async () => {
+    if (!selectedOrder?.id) {
+      setError("Select an order first.");
+      return;
+    }
+    if (!assignmentCourierId.trim()) {
+      setError("Select a courier before assigning.");
+      return;
+    }
+    try {
+      const data = await apiFetch({
+        apiBase,
+        token,
+        path: "/api/dispatch/assign",
+        method: "POST",
+        body: {
+          orderId: selectedOrder.id,
+          courierId: assignmentCourierId.trim(),
+          etaStart: assignmentEtaStart ? new Date(assignmentEtaStart).toISOString() : undefined,
+          etaEnd: assignmentEtaEnd ? new Date(assignmentEtaEnd).toISOString() : undefined,
+        },
+      });
+      setMessage(
+        `Courier assigned: ${data.order.courierId || assignmentCourierId.trim()} | Dispatch ${data.order.dispatchStatus || "assigned"}`
+      );
+      setSelectedOrder(data.order || null);
+      await Promise.all([loadQueueOrders(), loadCourierWorkload()]);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const loadCourierWorkload = async () => {
+    try {
+      const data = await apiFetch({
+        apiBase,
+        token,
+        path: "/api/dispatch/courier-workload",
+      });
+      setCourierRoster(Array.isArray(data.couriers) ? data.couriers : []);
     } catch (err) {
       setError(err.message);
     }
@@ -979,6 +1177,7 @@ export default function PharmacyQueue() {
       const results = await Promise.allSettled([
         loadChatThreads(),
         loadQueueOrders(),
+        loadCourierWorkload(),
         loadOtcInventory(),
         loadOtcOrders(),
         loadInterventions(),
@@ -1009,6 +1208,17 @@ export default function PharmacyQueue() {
   }, []);
 
   useEffect(() => {
+    if (!selectedOrder?.id) return;
+    const fresh = queueOrders.find((entry) => String(entry.id || "") === String(selectedOrder.id || ""));
+    if (!fresh) return;
+    setSelectedOrder(fresh);
+    setVerificationNonce(fresh.verificationNonce || "");
+    if (!String(assignmentCourierId || "").trim() && fresh.courierId) {
+      setAssignmentCourierId(fresh.courierId);
+    }
+  }, [queueOrders, selectedOrder?.id, assignmentCourierId]);
+
+  useEffect(() => {
     if (!autoRefreshEnabled) return undefined;
     const intervalId = window.setInterval(() => {
       refreshOperationalData({ silent: true });
@@ -1026,6 +1236,14 @@ export default function PharmacyQueue() {
     complianceAckFilter,
     queueFocusFilter,
   ]);
+
+  useEffect(() => {
+    if (String(assignmentCourierId || "").trim()) return;
+    const preferred = courierRoster.find((entry) => entry.online !== false && Number(entry.activeJobs || 0) < 5);
+    if (preferred?.courierId) {
+      setAssignmentCourierId(preferred.courierId);
+    }
+  }, [courierRoster, assignmentCourierId]);
 
   useEffect(() => {
     if (activeThreadId) {
@@ -1204,6 +1422,7 @@ export default function PharmacyQueue() {
                 {entry.patientName || entry.patientId || "Unknown patient"} | verification:{" "}
                 {entry.verificationStatus || "unverified"}
               </div>
+              <div className="meta">Stage: {getLifecycleLabel(entry)}</div>
               {getPrescriptionMeds(entry).length ? (
                 <div className="meta">
                   Rx: {formatMedSummary(getPrescriptionMeds(entry)[0])}
@@ -1235,6 +1454,98 @@ export default function PharmacyQueue() {
           {queueMetrics.processing} | Ready: {queueMetrics.ready} | Assigned: {queueMetrics.assigned} | Completed:{" "}
           {queueMetrics.completed} | Avg open: {queueMetrics.avgOpenMinutes} min
         </div>
+        {selectedOrder ? (
+          <div className="patient-record-detail pharmacy-order-journey">
+            <div className="patient-record-header">
+              <div>
+                <div className="patient-record-title">
+                  {selectedOrder.id} | {selectedOrder.patientName || selectedOrder.patientId || "Unknown patient"}
+                </div>
+                <div className="meta">
+                  Current stage: {getLifecycleLabel(selectedOrder)} | Order: {selectedOrder.orderStatus || "submitted"} |
+                  Dispatch: {selectedOrder.dispatchStatus || "none"}
+                </div>
+              </div>
+            </div>
+            <div className="pharmacy-order-journey__actions">
+              {selectedOrderActions.map((action) =>
+                action.type === "status" ? (
+                  <button
+                    key={`${selectedOrder.id}-${action.value}`}
+                    className="primary"
+                    type="button"
+                    onClick={() => triggerQuickStatus(action.value)}
+                  >
+                    {action.label}
+                  </button>
+                ) : (
+                  <div key={`${selectedOrder.id}-assign`} className="pharmacy-order-journey__assign">
+                    <label>
+                      Courier
+                      <select
+                        value={assignmentCourierId}
+                        onChange={(e) => setAssignmentCourierId(e.target.value)}
+                      >
+                        <option value="">Select courier</option>
+                        {courierRoster.map((entry) => (
+                          <option key={`pharmacy-courier-${entry.courierId}`} value={entry.courierId}>
+                            {(entry.courierName || entry.courierId) +
+                              ` | ${entry.online === false ? "offline" : "online"} | active ${Number(
+                                entry.activeJobs || 0
+                              )}`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      ETA start
+                      <input
+                        type="datetime-local"
+                        value={assignmentEtaStart}
+                        onChange={(e) => setAssignmentEtaStart(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      ETA end
+                      <input
+                        type="datetime-local"
+                        value={assignmentEtaEnd}
+                        onChange={(e) => setAssignmentEtaEnd(e.target.value)}
+                      />
+                    </label>
+                    <button className="primary" type="button" onClick={assignCourierToOrder}>
+                      {action.label}
+                    </button>
+                  </div>
+                )
+              )}
+              {!selectedOrderActions.length ? (
+                <div className="meta">
+                  No direct pharmacy action is available right now. Courier pickup and delivery updates continue in
+                  Dispatch.
+                </div>
+              ) : null}
+              {selectedOrder?.dispatchStatus === "queued" ? (
+                <div className="meta">
+                  This order is ready and queued for courier assignment. Once assigned, courier pickup and delivery
+                  events will keep the patient updated automatically.
+                </div>
+              ) : null}
+            </div>
+            <div className="pharmacy-order-journey__timeline">
+              {buildOrderJourney(selectedOrder).map((entry) => (
+                <div key={entry.id} className="pharmacy-order-journey__event">
+                  <div className="pharmacy-order-journey__dot" />
+                  <div>
+                    <div className="patient-record-title">{entry.label}</div>
+                    <div className="meta">{new Date(entry.at).toLocaleString()}</div>
+                    {entry.detail ? <div className="meta">{entry.detail}</div> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <label>
           Prescription ID
           <input value={prescId} onChange={(e) => setPrescId(e.target.value)} />
@@ -1579,6 +1890,66 @@ export default function PharmacyQueue() {
       ) : null}
       {activeSection === "operations" ? (
       <div className="form" id="pharmacy-compliance">
+        {selectedOrder ? (
+          <div className="notice">
+            <strong>{selectedOrder.id}</strong> | {selectedOrder.patientName || selectedOrder.patientId || "Patient"} |
+            Stage: {getLifecycleLabel(selectedOrder)}
+          </div>
+        ) : (
+          <div className="meta">Select an order from Queue &amp; Verify to run pharmacy operations.</div>
+        )}
+        {selectedOrderActions.length ? (
+          <div className="pharmacy-order-journey__actions">
+            {selectedOrderActions.map((action) =>
+              action.type === "status" ? (
+                <button
+                  key={`ops-${selectedOrder?.id}-${action.value}`}
+                  className="primary"
+                  type="button"
+                  onClick={() => triggerQuickStatus(action.value)}
+                >
+                  {action.label}
+                </button>
+              ) : (
+                <div key={`ops-${selectedOrder?.id}-assign`} className="pharmacy-order-journey__assign">
+                  <label>
+                    Courier
+                    <select value={assignmentCourierId} onChange={(e) => setAssignmentCourierId(e.target.value)}>
+                      <option value="">Select courier</option>
+                      {courierRoster.map((entry) => (
+                        <option key={`ops-courier-${entry.courierId}`} value={entry.courierId}>
+                          {(entry.courierName || entry.courierId) +
+                            ` | ${entry.online === false ? "offline" : "online"} | active ${Number(
+                              entry.activeJobs || 0
+                            )}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    ETA start
+                    <input
+                      type="datetime-local"
+                      value={assignmentEtaStart}
+                      onChange={(e) => setAssignmentEtaStart(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    ETA end
+                    <input
+                      type="datetime-local"
+                      value={assignmentEtaEnd}
+                      onChange={(e) => setAssignmentEtaEnd(e.target.value)}
+                    />
+                  </label>
+                  <button className="primary" type="button" onClick={assignCourierToOrder}>
+                    {action.label}
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        ) : null}
         <label>
           Order ID
           <input value={orderId} onChange={(e) => setOrderId(e.target.value)} />

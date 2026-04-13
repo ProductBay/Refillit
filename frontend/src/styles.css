@@ -2274,6 +2274,55 @@ button[disabled] .inline-spinner {
   min-width: 0;
 }
 
+.pharmacy-order-journey {
+  margin-top: 18px;
+}
+
+.pharmacy-order-journey__actions {
+  display: grid;
+  gap: 12px;
+}
+
+.pharmacy-order-journey__actions > button {
+  justify-self: start;
+}
+
+.pharmacy-order-journey__assign {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.pharmacy-order-journey__assign > button {
+  width: 100%;
+}
+
+.pharmacy-order-journey__timeline {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 123, 108, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 249, 247, 0.94));
+}
+
+.pharmacy-order-journey__event {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pharmacy-order-journey__dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, #e3ff7a, #0f7b6c 72%);
+  box-shadow: 0 0 0 4px rgba(15, 123, 108, 0.1);
+}
+
 .pharmacy-chat-header {
   margin: 8px 0 10px;
   padding: 10px 12px;
@@ -7725,6 +7774,17 @@ select::-ms-expand {
   .reception-alert-bell {
     right: 14px;
     bottom: 14px;
+  }
+}
+
+@media (max-width: 980px) {
+  .pharmacy-order-journey__assign {
+    grid-template-columns: 1fr;
+  }
+
+  .pharmacy-order-journey__actions > button,
+  .pharmacy-order-journey__assign > button {
+    width: 100%;
   }
 }
 

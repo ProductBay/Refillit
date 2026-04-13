@@ -680,7 +680,7 @@ router.get("/orders/queue", requireAuth, requireRoles(["pharmacy"]), async (req,
         }
         : null);
     const row = {
-      ...order,
+      ...(typeof order?.toJSON === "function" ? order.toJSON() : order),
       orderType: String(order.orderType || "prescription").toLowerCase(),
       patientName: patient?.fullName || null,
       patientEmail: patient?.email || null,
