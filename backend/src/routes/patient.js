@@ -81,6 +81,11 @@ const toIsoFromDateAndTime = (dateValue, timeValue) => {
   if (!Number.isNaN(parsedDate.getTime())) return parsedDate.toISOString();
   return "";
 };
+
+const resolvePharmacyParish = (profile = {}) => {
+  const metadata = profile?.metadata && typeof profile.metadata === "object" ? profile.metadata : {};
+  return String(metadata.parish || metadata.serviceParish || profile.town || profile.city || "").trim() || null;
+};
 const randomCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
 const maskIdNumber = (value) => {
   const text = String(value || "").trim();
@@ -1745,6 +1750,55 @@ router.get("/orders", requireAuth, requireRoles(PATIENT_CARE_CONTEXT_ROLES), asy
 
   rows.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   return res.json({ orders: rows.slice(0, limit) });
+});
+
+router.get("/pharmacies", requireAuth, requireRoles(PATIENT_CARE_CONTEXT_ROLES), async (req, res) => {
+  const ctx = await resolvePatientAccessContext(req, { scopeKey: "canRequestRefills" });
+  if (!ctx.ok) return res.status(ctx.status).json({ error: ctx.error });
+
+  const query = String(req.query.q || "").trim().toLowerCase();
+  const parishFilter = String(req.query.parish || "").trim().toLowerCase();
+  const profiles = await PharmacyProfile.findAll({});
+  const users = await User.findAll({ where: { role: "pharmacy" } });
+  const userById = new Map(users.map((entry) => [String(entry.id), entry]));
+
+  const rows = profiles
+    .map((profile) => {
+      const user = userById.get(String(profile.userId || "")) || null;
+      const parish = resolvePharmacyParish(profile);
+      const city = String(profile.city || "").trim() || null;
+      const address = String(profile.address || "").trim() || null;
+      const registeredName = String(profile.registeredName || user?.fullName || "").trim() || null;
+      if (!registeredName) return null;
+      return {
+        id: String(profile.id || profile.userId || ""),
+        userId: String(profile.userId || "") || null,
+        name: registeredName,
+        parish,
+        city,
+        address,
+        pharmacistInCharge: String(profile.pharmacistInCharge || "").trim() || null,
+        councilReg: String(profile.councilReg || "").trim() || null,
+        phone: String(user?.phone || "").trim() || null,
+        email: String(user?.email || "").trim() || null,
+      };
+    })
+    .filter(Boolean)
+    .filter((entry) => {
+      if (parishFilter && String(entry.parish || "").toLowerCase() !== parishFilter) return false;
+      if (!query) return true;
+      return [entry.name, entry.parish, entry.city, entry.address, entry.pharmacistInCharge]
+        .map((value) => String(value || "").toLowerCase())
+        .some((value) => value.includes(query));
+    })
+    .sort((a, b) => {
+      const parishCompare = String(a.parish || "").localeCompare(String(b.parish || ""));
+      if (parishCompare !== 0) return parishCompare;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
+  const parishes = Array.from(new Set(rows.map((entry) => String(entry.parish || "").trim()).filter(Boolean))).sort();
+  return res.json({ pharmacies: rows, parishes });
 });
 
 router.get("/orders/:id/tracking", requireAuth, requireRoles(PATIENT_CARE_CONTEXT_ROLES), async (req, res) => {

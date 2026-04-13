@@ -5,12 +5,121 @@ import { apiFetch } from "../utils/api.js";
 import LocalQrCode from "../components/LocalQrCode.jsx";
 import GlobalFeedbackOverlay from "../components/GlobalFeedbackOverlay.jsx";
 
+const PATIENT_FAVORITE_PHARMACIES_KEY = "refillit_patient_favorite_pharmacies";
+
 const maskLinkCode = (value) => {
   const raw = String(value || "").trim();
   if (!raw) return "Not available";
   if (raw.length <= 2) return `${raw[0] || ""}•`;
   if (raw.length <= 4) return `${raw.slice(0, 1)}${"•".repeat(Math.max(1, raw.length - 2))}${raw.slice(-1)}`;
   return `${raw.slice(0, 2)}${"•".repeat(Math.max(2, raw.length - 4))}${raw.slice(-2)}`;
+};
+const normalizeDateValue = (...candidates) => {
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === "") continue;
+    if (candidate instanceof Date && Number.isFinite(candidate.getTime())) return candidate;
+    if (typeof candidate === "number") {
+      const parsed = new Date(candidate);
+      if (Number.isFinite(parsed.getTime())) return parsed;
+      continue;
+    }
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (!trimmed) continue;
+      const parsed = new Date(trimmed);
+      if (Number.isFinite(parsed.getTime())) return parsed;
+      continue;
+    }
+  }
+  return null;
+};
+
+const slotDateFromEntry = (entry) =>
+  normalizeDateValue(
+    entry?.startAt,
+    entry?.start_at,
+    entry?.startDate,
+    entry?.start,
+    entry?.scheduledFor,
+    entry?.appointmentDate,
+    entry?.date,
+    entry?.slotStartAt,
+    entry?.dataValues?.startAt,
+    entry?.dataValues?.start_at,
+    entry?.dataValues?.startDate,
+    entry?.dataValues?.start,
+    entry?.dataValues?.scheduledFor,
+    entry?.dataValues?.appointmentDate,
+    entry?.dataValues?.date,
+    entry?.dataValues?.slotStartAt
+  );
+
+const slotEndDateFromEntry = (entry) =>
+  normalizeDateValue(
+    entry?.endAt,
+    entry?.end_at,
+    entry?.endDate,
+    entry?.end,
+    entry?.slotEndAt,
+    entry?.dataValues?.endAt,
+    entry?.dataValues?.end_at,
+    entry?.dataValues?.endDate,
+    entry?.dataValues?.end,
+    entry?.dataValues?.slotEndAt
+  );
+
+const formatDateTime = (value, fallback = "Date unavailable") => {
+  const parsed = value instanceof Date ? value : normalizeDateValue(value);
+  return parsed ? parsed.toLocaleString() : fallback;
+};
+
+const formatDateOnly = (value, fallback = "Date unavailable") => {
+  const parsed = value instanceof Date ? value : normalizeDateValue(value);
+  return parsed ? parsed.toLocaleDateString() : fallback;
+};
+
+const formatAvailabilityLabel = (slot) => {
+  const start = slotDateFromEntry(slot);
+  const end = slotEndDateFromEntry(slot);
+  const mode = String(slot?.mode || slot?.dataValues?.mode || "visit").trim();
+  const remaining = Number(slot?.remaining ?? slot?.dataValues?.remaining ?? 0);
+  const dateLabel = start ? start.toLocaleString() : "Date to be confirmed";
+  const rangeLabel = start && end ? ` - ${end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+  const remainingLabel = Number.isFinite(remaining) ? `${remaining} left` : "slots available";
+  return `${dateLabel}${rangeLabel} - ${mode || "visit"} (${remainingLabel})`;
+};
+
+const normalizePharmacyEntry = (entry) => {
+  if (!entry || typeof entry !== "object") return null;
+  const id = String(entry.id || entry.userId || "").trim();
+  if (!id) return null;
+  return {
+    id,
+    userId: String(entry.userId || "").trim() || null,
+    name: String(entry.name || entry.registeredName || "Pharmacy").trim(),
+    parish: String(entry.parish || "").trim() || "",
+    city: String(entry.city || "").trim() || "",
+    address: String(entry.address || "").trim() || "",
+    phone: String(entry.phone || "").trim() || "",
+    email: String(entry.email || "").trim() || "",
+    pharmacistInCharge: String(entry.pharmacistInCharge || "").trim() || "",
+    councilReg: String(entry.councilReg || "").trim() || "",
+  };
+};
+
+const normalizeAvailabilitySlot = (slot) => {
+  if (!slot || typeof slot !== "object") return null;
+  const plainSlot = slot?.dataValues && typeof slot.dataValues === "object" ? { ...slot.dataValues, ...slot } : slot;
+  const id = String(plainSlot.id || plainSlot.availabilityId || plainSlot.slotId || "").trim();
+  if (!id) return null;
+  return {
+    ...plainSlot,
+    id,
+    startAt: plainSlot.startAt || plainSlot.start_at || plainSlot.startDate || plainSlot.date || null,
+    endAt: plainSlot.endAt || plainSlot.end_at || plainSlot.endDate || null,
+    mode: plainSlot.mode || "visit",
+    remaining: Number(plainSlot.remaining ?? 0),
+  };
 };
 
 export default function PatientApp() {
@@ -23,6 +132,19 @@ export default function PatientApp() {
   const [linkCode, setLinkCode] = useState("");
   const [pharmacyId, setPharmacyId] = useState("");
   const [otcPharmacyId, setOtcPharmacyId] = useState("");
+  const [pharmacies, setPharmacies] = useState([]);
+  const [pharmacyParishes, setPharmacyParishes] = useState([]);
+  const [pharmacySearchQuery, setPharmacySearchQuery] = useState("");
+  const [pharmacyParishFilter, setPharmacyParishFilter] = useState("");
+  const [pharmacyPickerMode, setPharmacyPickerMode] = useState("all");
+  const [favoritePharmacyIds, setFavoritePharmacyIds] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PATIENT_FAVORITE_PHARMACIES_KEY) || "[]");
+      return Array.isArray(raw) ? raw.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
+    } catch (_error) {
+      return [];
+    }
+  });
   const [otcCatalog, setOtcCatalog] = useState([]);
   const [otcQuery, setOtcQuery] = useState("");
   const [otcCategory, setOtcCategory] = useState("");
@@ -164,6 +286,17 @@ export default function PatientApp() {
     [proxyPatients, activePatientId]
   );
   const activePatientPermissions = activePatientEntry?.permissions || {};
+  const recentPharmacyIds = useMemo(
+    () =>
+      Array.from(
+        new Set(patientOrders.map((entry) => String(entry.pharmacyId || "").trim()).filter(Boolean))
+      ),
+    [patientOrders]
+  );
+  const effectiveFavoritePharmacyIds = useMemo(
+    () => Array.from(new Set([...favoritePharmacyIds, ...recentPharmacyIds])),
+    [favoritePharmacyIds, recentPharmacyIds]
+  );
   const validateCaregiverIdFormat = (idType, idNumber) => {
     const normalizedType = String(idType || "").trim().toLowerCase();
     const text = String(idNumber || "").trim();
@@ -221,6 +354,21 @@ export default function PatientApp() {
       return status === "approved" || status === "pending";
     });
   }, [connectedDoctorsOnly, doctors]);
+  const visiblePharmacies = useMemo(() => {
+    const query = String(pharmacySearchQuery || "").trim().toLowerCase();
+    return pharmacies.filter((entry) => {
+      if (pharmacyPickerMode === "favorites" && !effectiveFavoritePharmacyIds.includes(entry.id)) return false;
+      if (pharmacyPickerMode === "parish" && pharmacyParishFilter && entry.parish !== pharmacyParishFilter) return false;
+      if (!query) return true;
+      return [entry.name, entry.parish, entry.city, entry.address, entry.pharmacistInCharge]
+        .map((value) => String(value || "").toLowerCase())
+        .some((value) => value.includes(query));
+    });
+  }, [effectiveFavoritePharmacyIds, pharmacies, pharmacyParishFilter, pharmacyPickerMode, pharmacySearchQuery]);
+  const selectedPharmacy = useMemo(
+    () => pharmacies.find((entry) => entry.id === pharmacyId) || pharmacies.find((entry) => entry.id === otcPharmacyId) || null,
+    [otcPharmacyId, pharmacies, pharmacyId]
+  );
   const selectedDoctorStatusClass = useMemo(() => {
     const status = String(selectedDoctorEntry?.connectionStatus || "none").toLowerCase();
     if (status === "approved") return "patient-doctor-status-badge patient-doctor-status-badge--approved";
@@ -305,8 +453,8 @@ export default function PatientApp() {
   );
   const openCareTaskCount = useMemo(() => careTasks.filter((item) => !item.completed).length, [careTasks]);
   const toDateKey = (value) => {
-    const parsed = new Date(value || "");
-    if (Number.isNaN(parsed.getTime())) return "";
+    const parsed = normalizeDateValue(value);
+    if (!parsed) return "";
     return parsed.toISOString().slice(0, 10);
   };
   const scrollToSection = (section) => {
@@ -839,7 +987,11 @@ export default function PatientApp() {
         token,
         path: withCareContextPath(`/api/patient/appointments/doctors/${selectedDoctor}/availability`),
       });
-      setAvailability(data.availability || []);
+        setAvailability(
+          Array.isArray(data.availability)
+            ? data.availability.map(normalizeAvailabilitySlot).filter(Boolean)
+            : []
+        );
       setError("");
     } catch (err) {
       setError(err.message);
@@ -1015,7 +1167,7 @@ export default function PatientApp() {
       return;
     }
     if (!pharmacyId.trim()) {
-      setError("Enter a pharmacy profile ID.");
+      setError("Select a pharmacy first.");
       return;
     }
     const data = await apiFetch({
@@ -1050,6 +1202,48 @@ export default function PatientApp() {
       await loadOrderTracking(data.order.id);
     }
     await loadSmartRefillAssistant();
+  };
+
+  const loadPharmacies = async () => {
+    if (isCaregiverSession) {
+      setPharmacies([]);
+      setPharmacyParishes([]);
+      return;
+    }
+    try {
+      const params = new URLSearchParams();
+      if (pharmacyPickerMode === "parish" && pharmacyParishFilter) params.set("parish", pharmacyParishFilter);
+      if (pharmacySearchQuery.trim()) params.set("q", pharmacySearchQuery.trim());
+      const query = params.toString() ? `?${params.toString()}` : "";
+      const data = await apiFetch({
+        apiBase,
+        token,
+        path: `/api/patient/pharmacies${query}`,
+      });
+      setPharmacies(Array.isArray(data.pharmacies) ? data.pharmacies.map(normalizePharmacyEntry).filter(Boolean) : []);
+      setPharmacyParishes(
+        Array.isArray(data.parishes)
+          ? data.parishes.map((entry) => String(entry || "").trim()).filter(Boolean)
+          : []
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const selectPharmacyForOrders = (nextPharmacyId) => {
+    const normalizedId = String(nextPharmacyId || "").trim();
+    setPharmacyId(normalizedId);
+    setOtcPharmacyId(normalizedId);
+  };
+
+  const toggleFavoritePharmacy = (nextPharmacyId) => {
+    const normalizedId = String(nextPharmacyId || "").trim();
+    if (!normalizedId) return;
+    setFavoritePharmacyIds((current) => {
+      if (current.includes(normalizedId)) return current.filter((entry) => entry !== normalizedId);
+      return [...current, normalizedId];
+    });
   };
 
   const loadOtcCatalog = async () => {
@@ -1151,7 +1345,7 @@ export default function PatientApp() {
         return;
       }
       if (!otcPharmacyId.trim()) {
-        setError("Enter a pharmacy ID for OTC ordering.");
+        setError("Select a pharmacy before browsing or ordering OTC items.");
         return;
       }
       if (!otcCartItems.length) {
@@ -2021,6 +2215,10 @@ export default function PatientApp() {
   );
 
   useEffect(() => {
+    localStorage.setItem(PATIENT_FAVORITE_PHARMACIES_KEY, JSON.stringify(favoritePharmacyIds));
+  }, [favoritePharmacyIds]);
+
+  useEffect(() => {
     if (isCaregiverSession) {
       loadProxyPatients();
       return;
@@ -2039,6 +2237,7 @@ export default function PatientApp() {
     loadWalletSummary();
     loadPatientOrders();
     loadInstallmentPlans();
+    loadPharmacies();
     loadOtcCatalog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCaregiverSession]);
@@ -2072,14 +2271,23 @@ export default function PatientApp() {
       return undefined;
     }
     loadPrescriptions();
+    if (!isCaregiverSession) loadPharmacies();
     loadOtcCatalog();
     const intervalId = window.setInterval(() => {
       loadPrescriptions();
+      if (!isCaregiverSession) loadPharmacies();
       loadOtcCatalog();
     }, 15000);
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isCaregiverSession, activePatientId, activePatientEntry?.id]);
+
+  useEffect(() => {
+    if (activeTab !== "prescription") return;
+    if (isCaregiverSession) return;
+    loadPharmacies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, pharmacyPickerMode, pharmacyParishFilter, pharmacySearchQuery]);
 
   useEffect(() => {
     if (!selectedDoctor) {
@@ -2090,6 +2298,16 @@ export default function PatientApp() {
     loadAvailability();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctor]);
+
+  useEffect(() => {
+    if (!pharmacies.length) return;
+    const currentSelectedId = String(pharmacyId || otcPharmacyId || "").trim();
+    if (currentSelectedId && pharmacies.some((entry) => entry.id === currentSelectedId)) return;
+    const preferredFavorite = pharmacies.find((entry) => effectiveFavoritePharmacyIds.includes(entry.id));
+    const nextChoice = preferredFavorite || pharmacies[0];
+    if (nextChoice?.id) selectPharmacyForOrders(nextChoice.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveFavoritePharmacyIds, pharmacies]);
 
   useEffect(() => {
     if (!selectedDoctor) return;
@@ -2297,7 +2515,7 @@ export default function PatientApp() {
           <button type="button" className="patient-snapshot-card" onClick={() => scrollToSection("doctor")}>
             <div className="patient-snapshot-card__label">Next Appointment</div>
             <div className="patient-snapshot-card__value">
-              {nextAppointment ? new Date(nextAppointment.startAt).toLocaleString() : "None booked"}
+                {nextAppointment ? formatDateTime(nextAppointment.startAt, "Date pending") : "None booked"}
             </div>
             <div className="patient-snapshot-card__meta">
               {nextAppointment
@@ -2373,7 +2591,7 @@ export default function PatientApp() {
                 <article key={row.id} className="queue-card">
                   <div>
                     <div className="queue-title">
-                      {row.doctorName} | {new Date(row.startAt).toLocaleString()}
+                        {row.doctorName} | {formatDateTime(row.startAt, "Date pending")}
                     </div>
                     <div className="queue-meta">
                       Consultation: {currencyFormat(row.currency, row.consultationFee)} | Additional:{" "}
@@ -2410,7 +2628,7 @@ export default function PatientApp() {
                 {openBalanceRows.length ? (
                   openBalanceRows.map((row) => (
                     <div className="queue-meta" key={`bal-${row.id}`}>
-                      {new Date(row.startAt).toLocaleDateString()} | {row.doctorName} | Open balance:{" "}
+                        {formatDateOnly(row.startAt, "Date pending")} | {row.doctorName} | Open balance:{" "}
                       {currencyFormat(row.currency, row.balance)}
                     </div>
                   ))
@@ -2432,7 +2650,7 @@ export default function PatientApp() {
                   <option value="">Select appointment</option>
                   {openBalanceRows.map((row) => (
                     <option key={row.id} value={row.id}>
-                      {new Date(row.startAt).toLocaleDateString()} | {row.doctorName} |{" "}
+                        {formatDateOnly(row.startAt, "Date pending")} | {row.doctorName} |{" "}
                       {currencyFormat(row.currency, row.balance)}
                     </option>
                   ))}
@@ -2660,7 +2878,7 @@ export default function PatientApp() {
                     <option value="">Select slot</option>
                     {availability.map((slot) => (
                       <option value={slot.id} key={slot.id}>
-                        {new Date(slot.startAt).toLocaleString()} - {slot.mode} ({slot.remaining} left)
+                          {formatAvailabilityLabel(slot)}
                       </option>
                     ))}
                   </select>
@@ -2692,7 +2910,10 @@ export default function PatientApp() {
                     <div>
                       <div className="queue-title">{booking.doctorName || booking.doctorId}</div>
                       <div className="queue-meta">
-                        {new Date(booking.startAt).toLocaleString()} - {new Date(booking.endAt).toLocaleString()}
+                          {formatDateTime(booking.startAt, "Date pending")} - {formatDateTime(
+                            booking.endAt,
+                            "End time pending"
+                          )}
                       </div>
                       <div className="queue-meta">
                         status: {booking.status} | {booking.mode} | {booking.location || "No location"}
@@ -2830,13 +3051,107 @@ export default function PatientApp() {
             ) : null}
 
             {!isCaregiverSession ? (
-            <article className="patient-card">
+            <article className="patient-card patient-card--wide">
               <h3>Create Pharmacy Order</h3>
+              <div className="meta">Choose a pharmacy the easy way: browse all, use favorites, or narrow by parish.</div>
+              <div className="patient-pharmacy-picker">
+                <div className="patient-pharmacy-picker__toolbar">
+                  <div className="patient-pharmacy-picker__modes" role="tablist" aria-label="Pharmacy picker modes">
+                    <button
+                      type="button"
+                      className={`ghost${pharmacyPickerMode === "all" ? " active" : ""}`}
+                      onClick={() => setPharmacyPickerMode("all")}
+                    >
+                      All pharmacies
+                    </button>
+                    <button
+                      type="button"
+                      className={`ghost${pharmacyPickerMode === "favorites" ? " active" : ""}`}
+                      onClick={() => setPharmacyPickerMode("favorites")}
+                    >
+                      Favorites
+                    </button>
+                    <button
+                      type="button"
+                      className={`ghost${pharmacyPickerMode === "parish" ? " active" : ""}`}
+                      onClick={() => setPharmacyPickerMode("parish")}
+                    >
+                      By parish
+                    </button>
+                  </div>
+                  <div className="patient-pharmacy-picker__filters">
+                    <input
+                      value={pharmacySearchQuery}
+                      onChange={(e) => setPharmacySearchQuery(e.target.value)}
+                      placeholder="Search pharmacy name, address, or pharmacist"
+                    />
+                    <select
+                      value={pharmacyParishFilter}
+                      onChange={(e) => {
+                        setPharmacyParishFilter(e.target.value);
+                        if (e.target.value) setPharmacyPickerMode("parish");
+                      }}
+                    >
+                      <option value="">All parishes</option>
+                      {pharmacyParishes.map((entry) => (
+                        <option key={entry} value={entry}>
+                          {entry}
+                        </option>
+                      ))}
+                    </select>
+                    <button className="ghost" type="button" onClick={loadPharmacies}>
+                      Refresh pharmacies
+                    </button>
+                  </div>
+                </div>
+                <div className="patient-pharmacy-picker__list">
+                  {visiblePharmacies.map((entry) => {
+                    const isSelected = entry.id === pharmacyId;
+                    const isFavorite = effectiveFavoritePharmacyIds.includes(entry.id);
+                    return (
+                      <button
+                        type="button"
+                        key={entry.id}
+                        className={`patient-pharmacy-option${isSelected ? " patient-pharmacy-option--selected" : ""}`}
+                        onClick={() => selectPharmacyForOrders(entry.id)}
+                      >
+                        <div className="patient-pharmacy-option__content">
+                          <div className="patient-pharmacy-option__title-row">
+                            <strong>{entry.name}</strong>
+                            {entry.parish ? <span className="patient-pharmacy-chip">{entry.parish}</span> : null}
+                          </div>
+                          <div className="queue-meta">
+                            {entry.city || "City not listed"}
+                            {entry.address ? ` | ${entry.address}` : ""}
+                          </div>
+                          <div className="queue-meta">
+                            {entry.pharmacistInCharge ? `Pharmacist: ${entry.pharmacistInCharge}` : "Pharmacist on duty"}
+                            {entry.phone ? ` | ${entry.phone}` : ""}
+                          </div>
+                        </div>
+                        <span
+                          className="ghost patient-pharmacy-option__favorite"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleFavoritePharmacy(entry.id);
+                          }}
+                        >
+                          {isFavorite ? "Saved" : "Save"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {!visiblePharmacies.length ? (
+                    <div className="meta">No pharmacies match this filter yet. Try all pharmacies or a different parish.</div>
+                  ) : null}
+                </div>
+              </div>
               <div className="form">
-                <label>
-                  Pharmacy profile ID
-                  <input value={pharmacyId} onChange={(e) => setPharmacyId(e.target.value)} />
-                </label>
+                <div className="notice">
+                  <strong>Selected pharmacy:</strong> {selectedPharmacy?.name || "None selected"}
+                  {selectedPharmacy?.parish ? ` | ${selectedPharmacy.parish}` : ""}
+                  {selectedPharmacy?.address ? ` | ${selectedPharmacy.address}` : ""}
+                </div>
                 <button className="primary" onClick={createOrder}>
                   Create order
                 </button>
@@ -2851,10 +3166,9 @@ export default function PatientApp() {
                 <span className={otcPreflightBadge.className}>{otcPreflightBadge.label}</span>
               </div>
               <div className="form">
-                <label>
-                  Pharmacy profile ID
-                  <input value={otcPharmacyId} onChange={(e) => setOtcPharmacyId(e.target.value)} />
-                </label>
+                <div className="notice">
+                  OTC pharmacy: <strong>{selectedPharmacy?.name || "Select a pharmacy above"}</strong>
+                </div>
                 <label>
                   Search OTC
                   <input
