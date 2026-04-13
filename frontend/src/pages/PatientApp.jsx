@@ -713,6 +713,111 @@ export default function PatientApp() {
     if (status === "locked") return "red";
     return "amber";
   };
+  const getDeliveryProgressModel = (order) => {
+    const orderStatus = String(order?.orderStatus || "").toLowerCase();
+    const dispatchStatus = String(order?.dispatchStatus || "").toLowerCase();
+    const otpStatus = String(order?.otpState?.status || "not_issued").toLowerCase();
+    const isDelivered = dispatchStatus === "delivered" || orderStatus === "completed";
+    const currentStepKey = isDelivered
+      ? "delivered"
+      : dispatchStatus === "arrived"
+        ? "arrived"
+        : dispatchStatus === "picked_up"
+          ? "picked_up"
+          : dispatchStatus === "accepted"
+            ? "assigned"
+            : dispatchStatus === "assigned" || orderStatus === "assigned"
+              ? "assigned"
+              : dispatchStatus === "queued" || orderStatus === "ready"
+                ? "ready"
+                : orderStatus === "processing"
+                  ? "processing"
+                  : "submitted";
+    const steps = [
+      {
+        key: "submitted",
+        label: "Submitted",
+        detail: "Order placed with pharmacy",
+      },
+      {
+        key: "processing",
+        label: "Accepted",
+        detail: "Pharmacy is preparing your prescription",
+      },
+      {
+        key: "ready",
+        label: "Ready",
+        detail: dispatchStatus === "queued" ? "Ready and waiting for courier assignment" : "Prescription is ready",
+      },
+      {
+        key: "assigned",
+        label: "Courier assigned",
+        detail:
+          dispatchStatus === "accepted"
+            ? "Courier accepted the delivery job"
+            : "Courier assigned to your order",
+      },
+      {
+        key: "picked_up",
+        label: "Picked up",
+        detail: dispatchStatus === "arrived" ? "Courier has arrived near destination" : "Courier picked up your order",
+      },
+      {
+        key: "delivered",
+        label: "Delivered",
+        detail:
+          otpStatus === "verified" || isDelivered
+            ? "Secure handoff completed"
+            : "Delivery will complete after secure handoff",
+      },
+    ];
+    const currentIndex = Math.max(
+      0,
+      steps.findIndex((step) => step.key === currentStepKey)
+    );
+    const progressPercent = steps.length > 1 ? Math.round((currentIndex / (steps.length - 1)) * 100) : 0;
+    const headline =
+      currentStepKey === "submitted"
+        ? "Waiting for pharmacy acceptance"
+        : currentStepKey === "processing"
+          ? "Pharmacy is preparing your order"
+          : currentStepKey === "ready"
+            ? dispatchStatus === "queued"
+              ? "Ready and waiting for a courier"
+              : "Ready for delivery workflow"
+            : currentStepKey === "assigned"
+              ? "Courier assigned to your order"
+              : currentStepKey === "picked_up"
+                ? dispatchStatus === "arrived"
+                  ? "Courier has arrived"
+                  : "Courier has your prescription"
+                : "Delivery completed";
+    return { steps, currentIndex, progressPercent, headline };
+  };
+  const formatTrackingEventLabel = (event) => {
+    const fallback = String(event?.label || "").trim();
+    if (fallback) return fallback;
+    const type = String(event?.type || "").toLowerCase();
+    const labels = {
+      order_created: "Order submitted",
+      status_processing: "Pharmacy accepted order",
+      status_ready: "Prescription ready",
+      status_assigned: "Courier assignment recorded",
+      status_completed: "Order completed",
+      status_failed: "Order exception",
+      queued: "Queued for courier assignment",
+      assigned: "Courier assigned",
+      accepted: "Courier accepted delivery",
+      picked_up: "Courier picked up order",
+      arrived: "Courier arrived nearby",
+      delivered: "Delivered",
+      otp_issued: "Secure delivery QR issued",
+      otp_delivery_attempt: "Delivery code sent",
+      otp_failed: "Delivery code attempt failed",
+      geofence_warning: "Location verification warning",
+    };
+    return labels[type] || type.replace(/_/g, " ");
+  };
   const showFallbackCode = () => {
     setFallbackCodeVisible(true);
     setFallbackCodeRemainingSec(FALLBACK_CODE_REVEAL_SECONDS);
@@ -1158,50 +1263,83 @@ export default function PatientApp() {
   };
 
   const createOrder = async () => {
-    if (isCaregiverSession) {
-      setError("Order creation is only available in the patient account.");
-      return;
-    }
-    if (!prescId.trim()) {
-      setError("Select or enter a prescription ID first.");
-      return;
-    }
-    if (!pharmacyId.trim()) {
-      setError("Select a pharmacy first.");
-      return;
-    }
-    const data = await apiFetch({
-      apiBase,
-      token,
-      path: "/api/patient/orders",
-      method: "POST",
-      body: {
-        prescId,
-        pharmacyId,
-        deliveryOption: "delivery",
-        payment: { method: "cash", amount: 0, status: "pending" },
-        instructions: deliveryPreferenceForm.instructions,
-        recipientName: deliveryPreferenceForm.recipientName,
-        recipientPhone: deliveryPreferenceForm.recipientPhone,
-        allowProxyReceive: deliveryPreferenceForm.allowProxyReceive === true,
-        deliveryAddress: {
-          addressLine: deliveryPreferenceForm.addressLine,
-          city: deliveryPreferenceForm.city,
-          parish: deliveryPreferenceForm.parish,
-          postalCode: deliveryPreferenceForm.postalCode,
-          lat: deliveryPreferenceForm.lat,
-          lng: deliveryPreferenceForm.lng,
+    try {
+      if (isCaregiverSession) {
+        setError("Order creation is only available in the patient account.");
+        return;
+      }
+      if (!prescId.trim()) {
+        setError("Select or enter a prescription ID first.");
+        return;
+      }
+      if (!pharmacyId.trim()) {
+        setError("Select a pharmacy first.");
+        return;
+      }
+
+      const paymentAmounts = getRefillAmounts({ estimatedRefillAmount: 3000, estimatedDeliveryFee: 600 });
+      const intentCreate = await apiFetch({
+        apiBase,
+        token,
+        path: "/api/patient/payment-intents",
+        method: "POST",
+        body: {
+          prescId,
+          method: "card",
+          refillAmount: paymentAmounts.refillAmount,
+          deliveryFee: paymentAmounts.deliveryFee,
         },
-      },
-    });
-    setStatus(`Order created: ${data.order.id}`);
-    setError("");
-    await loadPatientOrders();
-    if (data.order?.id) {
-      setTrackingOrderId(data.order.id);
-      await loadOrderTracking(data.order.id);
+      });
+      const intentId = String(intentCreate?.intent?.id || "").trim();
+      if (!intentId) throw new Error("Failed to initialize prescription order payment");
+
+      const intentAuthorize = await apiFetch({
+        apiBase,
+        token,
+        path: `/api/patient/payment-intents/${encodeURIComponent(intentId)}/authorize`,
+        method: "POST",
+      });
+      const finalStatus = String(intentAuthorize?.intent?.status || "").toLowerCase();
+      if (!["authorized", "paid"].includes(finalStatus)) {
+        throw new Error("Prescription order payment was not authorized");
+      }
+
+      const data = await apiFetch({
+        apiBase,
+        token,
+        path: "/api/patient/orders",
+        method: "POST",
+        body: {
+          prescId,
+          pharmacyId,
+          paymentIntentId: intentId,
+          deliveryOption: "delivery",
+          payment: { method: "card", amount: paymentAmounts.total, status: finalStatus },
+          instructions: deliveryPreferenceForm.instructions,
+          recipientName: deliveryPreferenceForm.recipientName,
+          recipientPhone: deliveryPreferenceForm.recipientPhone,
+          allowProxyReceive: deliveryPreferenceForm.allowProxyReceive === true,
+          deliveryAddress: {
+            addressLine: deliveryPreferenceForm.addressLine,
+            city: deliveryPreferenceForm.city,
+            parish: deliveryPreferenceForm.parish,
+            postalCode: deliveryPreferenceForm.postalCode,
+            lat: deliveryPreferenceForm.lat,
+            lng: deliveryPreferenceForm.lng,
+          },
+        },
+      });
+      setStatus(`Order created: ${data.order.id}`);
+      setError("");
+      await loadPatientOrders();
+      if (data.order?.id) {
+        setTrackingOrderId(data.order.id);
+        await loadOrderTracking(data.order.id);
+      }
+      await loadSmartRefillAssistant();
+    } catch (err) {
+      setError(err.message);
     }
-    await loadSmartRefillAssistant();
   };
 
   const loadPharmacies = async () => {
@@ -3349,10 +3487,22 @@ export default function PatientApp() {
               </div>
               <div className="queue">
                 {patientOrders.map((entry) => (
-                  <article key={entry.id} className="queue-card">
+                  <article key={entry.id} className="queue-card patient-delivery-card">
                     <div>
                       <div className="queue-title">
                         {entry.id} | {entry.dispatchStatus || "none"} | {entry.orderStatus || "submitted"}
+                      </div>
+                      <div className="patient-delivery-progress patient-delivery-progress--compact">
+                        <div className="patient-delivery-progress__header">
+                          <strong>{getDeliveryProgressModel(entry).headline}</strong>
+                          <span className="meta">{getDeliveryProgressModel(entry).progressPercent}%</span>
+                        </div>
+                        <div className="patient-delivery-progress__bar">
+                          <span
+                            className="patient-delivery-progress__fill"
+                            style={{ width: `${getDeliveryProgressModel(entry).progressPercent}%` }}
+                          />
+                        </div>
                       </div>
                       <div className="queue-meta">
                         Pharmacy: {entry.pharmacyName || entry.pharmacyId || "n/a"} | Courier:{" "}
@@ -3382,11 +3532,46 @@ export default function PatientApp() {
                 {!patientOrders.length ? <div className="meta">No delivery orders found yet.</div> : null}
               </div>
               {trackingData?.order ? (
-                <div className="notice">
+                <div className="notice patient-delivery-tracker">
                   <strong>Tracking {trackingData.order.id}</strong>
                   <br />
                   Status: {trackingData.order.dispatchStatus || "none"} | Courier:{" "}
                   {trackingData.order?.courier?.fullName || trackingData.order.courierName || "unassigned"}
+                  <br />
+                  <div className="patient-delivery-progress">
+                    <div className="patient-delivery-progress__header">
+                      <strong>{getDeliveryProgressModel(trackingData.order).headline}</strong>
+                      <span className="meta">
+                        {getDeliveryProgressModel(trackingData.order).progressPercent}% complete
+                      </span>
+                    </div>
+                    <div className="patient-delivery-progress__bar">
+                      <span
+                        className="patient-delivery-progress__fill"
+                        style={{ width: `${getDeliveryProgressModel(trackingData.order).progressPercent}%` }}
+                      />
+                    </div>
+                    <div className="patient-delivery-progress__steps">
+                      {getDeliveryProgressModel(trackingData.order).steps.map((step, index) => {
+                        const state =
+                          index < getDeliveryProgressModel(trackingData.order).currentIndex
+                            ? "done"
+                            : index === getDeliveryProgressModel(trackingData.order).currentIndex
+                              ? "active"
+                              : "pending";
+                        return (
+                          <div
+                            key={`track-step-${step.key}`}
+                            className={`patient-delivery-progress__step patient-delivery-progress__step--${state}`}
+                          >
+                            <span className="patient-delivery-progress__step-dot" />
+                            <strong>{step.label}</strong>
+                            <span className="meta">{step.detail}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <br />
                   OTP status:{" "}
                   <span
@@ -3586,10 +3771,15 @@ export default function PatientApp() {
                   </div>
                   <br />
                   Timeline:
-                  <div className="queue">
+                  <div className="queue patient-delivery-timeline">
                     {(trackingData.timeline || []).map((event) => (
-                      <div key={event.id} className="queue-meta">
-                        {new Date(event.at || Date.now()).toLocaleString()} | {event.type}
+                      <div key={event.id} className="patient-delivery-timeline__event">
+                        <div className="patient-delivery-timeline__dot" />
+                        <div>
+                          <div className="queue-title">{formatTrackingEventLabel(event)}</div>
+                          <div className="queue-meta">{new Date(event.at || Date.now()).toLocaleString()}</div>
+                          {event.detail ? <div className="queue-meta">{event.detail}</div> : null}
+                        </div>
                       </div>
                     ))}
                     {!trackingData.timeline?.length ? <div className="queue-meta">No dispatch updates yet.</div> : null}

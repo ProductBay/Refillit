@@ -3470,6 +3470,130 @@ select::-ms-expand {
   letter-spacing: 0.12em;
 }
 
+.patient-delivery-card {
+  display: grid;
+  gap: 14px;
+}
+
+.patient-delivery-progress {
+  margin: 12px 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 123, 108, 0.12);
+  background: linear-gradient(180deg, rgba(249, 254, 252, 0.98), rgba(241, 249, 247, 0.94));
+}
+
+.patient-delivery-progress--compact {
+  padding: 10px 12px;
+  margin: 10px 0 0;
+}
+
+.patient-delivery-progress__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.patient-delivery-progress__bar {
+  position: relative;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 123, 108, 0.1);
+}
+
+.patient-delivery-progress__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8cc63f 0%, #c9ff4a 38%, #0f7b6c 100%);
+  box-shadow: 0 0 24px rgba(141, 198, 63, 0.28);
+  animation: patientDeliveryPulse 2.6s ease-in-out infinite;
+}
+
+.patient-delivery-progress__steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.patient-delivery-progress__step {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 123, 108, 0.1);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.patient-delivery-progress__step--done {
+  border-color: rgba(15, 123, 108, 0.2);
+  background: rgba(230, 249, 243, 0.95);
+}
+
+.patient-delivery-progress__step--active {
+  border-color: rgba(15, 123, 108, 0.3);
+  box-shadow: 0 16px 28px rgba(15, 123, 108, 0.1);
+  background: linear-gradient(180deg, rgba(245, 255, 214, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.patient-delivery-progress__step-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(15, 123, 108, 0.18);
+  box-shadow: 0 0 0 4px rgba(15, 123, 108, 0.06);
+}
+
+.patient-delivery-progress__step--done .patient-delivery-progress__step-dot,
+.patient-delivery-progress__step--active .patient-delivery-progress__step-dot {
+  background: radial-gradient(circle at 35% 35%, #e8ff98, #0f7b6c 75%);
+}
+
+.patient-delivery-tracker {
+  display: grid;
+  gap: 8px;
+}
+
+.patient-delivery-timeline {
+  gap: 12px;
+}
+
+.patient-delivery-timeline__event {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 123, 108, 0.1);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.patient-delivery-timeline__dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, #e8ff98, #0f7b6c 75%);
+  box-shadow: 0 0 0 4px rgba(15, 123, 108, 0.08);
+}
+
+@keyframes patientDeliveryPulse {
+  0%,
+  100% {
+    filter: saturate(1);
+    transform: translateX(0);
+  }
+  50% {
+    filter: saturate(1.08);
+    transform: translateX(2px);
+  }
+}
+
 .patient-stock-badge {
   display: inline-flex;
   align-items: center;
@@ -7778,6 +7902,10 @@ select::-ms-expand {
 }
 
 @media (max-width: 980px) {
+  .patient-delivery-progress__steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pharmacy-order-journey__assign {
     grid-template-columns: 1fr;
   }

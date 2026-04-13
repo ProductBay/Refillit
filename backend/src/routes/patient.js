@@ -593,6 +593,96 @@ const buildPatientOtpState = (order) => {
   };
 };
 
+const buildPatientOrderTimeline = (order) => {
+  const base = typeof order?.toJSON === "function" ? order.toJSON() : order || {};
+  const createdAt = base?.createdAt || null;
+  const events = [];
+  if (createdAt) {
+    events.push({
+      id: `${String(base.id || "order")}-created`,
+      at: createdAt,
+      type: "order_created",
+      stage: "submitted",
+      source: "order",
+      label: "Order submitted",
+      detail: "Your order was created and sent to the pharmacy.",
+    });
+  }
+
+  const statusHistory = Array.isArray(base?.statusHistory) ? base.statusHistory : [];
+  const statusLabels = {
+    submitted: { label: "Order submitted", detail: "Waiting for pharmacy review." },
+    processing: { label: "Pharmacy accepted order", detail: "Your pharmacy is preparing the prescription." },
+    ready: {
+      label:
+        String(base?.deliveryOption || "").toLowerCase() === "delivery"
+          ? "Prescription ready for dispatch"
+          : "Prescription ready for pickup",
+      detail:
+        String(base?.deliveryOption || "").toLowerCase() === "delivery"
+          ? "The pharmacy finished preparation and the order is ready for courier handoff."
+          : "The pharmacy finished preparation and the order is ready for you.",
+    },
+    assigned: { label: "Courier assignment recorded", detail: "A courier is now responsible for delivery." },
+    completed: { label: "Order completed", detail: "The prescription order reached its final completed state." },
+    failed: { label: "Order failed", detail: "The order encountered an exception and needs attention." },
+  };
+  for (const entry of statusHistory) {
+    const status = String(entry?.status || "").toLowerCase();
+    const meta = statusLabels[status] || {
+      label: `Order ${status || "updated"}`,
+      detail: entry?.by ? `Updated by ${entry.by}` : "Order status changed.",
+    };
+    events.push({
+      id: entry?.id || `${String(base.id || "order")}-status-${status}-${entry?.at || Math.random()}`,
+      at: entry?.at || null,
+      type: `status_${status || "updated"}`,
+      stage: status || null,
+      source: "pharmacy",
+      label: meta.label,
+      detail: meta.detail,
+    });
+  }
+
+  const dispatchTimeline = Array.isArray(base?.dispatchTimeline) ? base.dispatchTimeline : [];
+  const dispatchLabels = {
+    queued: { label: "Queued for courier assignment", detail: "Waiting for an available courier." },
+    assigned: { label: "Courier assigned", detail: "A courier has been assigned to your order." },
+    accepted: { label: "Courier accepted job", detail: "The courier confirmed the delivery route." },
+    picked_up: { label: "Prescription picked up", detail: "The courier has the order in hand." },
+    arrived: { label: "Courier arrived", detail: "The courier has reached the delivery area." },
+    delivered: { label: "Delivered", detail: "Delivery was completed successfully." },
+    failed: { label: "Dispatch issue", detail: "Delivery encountered a dispatch exception." },
+    otp_issued: { label: "Secure delivery QR issued", detail: "Your one-time QR handoff token is ready." },
+    otp_delivery_attempt: { label: "Delivery code sent", detail: "A secure delivery code was sent to you." },
+    otp_failed: { label: "Delivery code validation failed", detail: "A previous QR or OTP attempt did not validate." },
+    geofence_warning: { label: "Location verification warning", detail: "Delivery location check raised a warning." },
+    auto_assigned: { label: "Courier auto-assigned", detail: "Dispatch assigned a courier automatically." },
+    batch_assigned: { label: "Courier assigned by dispatch batch", detail: "Dispatch assigned a courier in batch ops." },
+  };
+  for (const entry of dispatchTimeline) {
+    const type = String(entry?.type || "").toLowerCase();
+    const meta = dispatchLabels[type] || {
+      label: `Dispatch ${type || "updated"}`,
+      detail: "Delivery workflow advanced.",
+    };
+    events.push({
+      id: entry?.id || `${String(base.id || "order")}-dispatch-${type}-${entry?.at || Math.random()}`,
+      at: entry?.at || null,
+      type: type || "dispatch_update",
+      stage: type || null,
+      source: "dispatch",
+      label: meta.label,
+      detail: meta.detail,
+      meta: entry?.meta || null,
+    });
+  }
+
+  return events
+    .filter((entry) => entry.at)
+    .sort((a, b) => new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime());
+};
+
 const resolvePatientAccessContext = async (req, { scopeKey = null } = {}) => {
   if (req.user?.role === "patient") {
     return { ok: true, patientId: req.user.id, proxyLink: null, isProxy: false };
@@ -1734,8 +1824,9 @@ router.get("/orders", requireAuth, requireRoles(PATIENT_CARE_CONTEXT_ROLES), asy
     const pharmacy = order.pharmacyId ? await User.findByPk(order.pharmacyId) : null;
     // eslint-disable-next-line no-await-in-loop
     const courier = order.courierId ? await User.findByPk(order.courierId) : null;
+    const baseOrder = typeof order?.toJSON === "function" ? order.toJSON() : order;
     rows.push({
-      ...order,
+      ...baseOrder,
       dispatchStatus: normalizeDispatchStatus(order),
       pharmacyName: pharmacy?.fullName || null,
       courierName: courier?.fullName || null,
@@ -1812,12 +1903,12 @@ router.get("/orders/:id/tracking", requireAuth, requireRoles(PATIENT_CARE_CONTEX
 
   const courier = order.courierId ? await User.findByPk(order.courierId) : null;
   const pharmacy = order.pharmacyId ? await User.findByPk(order.pharmacyId) : null;
-  const timeline = Array.isArray(order.dispatchTimeline) ? [...order.dispatchTimeline] : [];
-  timeline.sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+  const baseOrder = typeof order?.toJSON === "function" ? order.toJSON() : order;
+  const timeline = buildPatientOrderTimeline(order);
 
   return res.json({
     order: {
-      ...order,
+      ...baseOrder,
       dispatchStatus: normalizeDispatchStatus(order),
       pharmacyName: pharmacy?.fullName || null,
       courier: courier
