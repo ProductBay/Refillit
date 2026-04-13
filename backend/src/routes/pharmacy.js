@@ -660,11 +660,31 @@ router.get("/orders/queue", requireAuth, requireRoles(["pharmacy"]), async (req,
     const patient = order.patientId ? await User.findByPk(order.patientId) : null;
     // eslint-disable-next-line no-await-in-loop
     const courier = order.courierId ? await User.findByPk(order.courierId) : null;
+    // eslint-disable-next-line no-await-in-loop
+    const prescription =
+      !order.orderType || String(order.orderType || "").toLowerCase() === "prescription"
+        ? await Prescription.findByPk(order.prescId)
+        : null;
+    const prescriptionSnapshot =
+      order.prescriptionSnapshot
+      || (prescription
+        ? {
+          id: prescription.id,
+          doctorId: prescription.doctorId || null,
+          doctorName: prescription.doctorName || null,
+          patientId: prescription.patientId || null,
+          patientFullName: prescription.patientFullName || null,
+          meds: Array.isArray(prescription.meds) ? prescription.meds : [],
+          allowedRefills: Number(prescription.allowedRefills || 0),
+          expiryDate: prescription.expiryDate || null,
+        }
+        : null);
     const row = {
       ...order,
       orderType: String(order.orderType || "prescription").toLowerCase(),
       patientName: patient?.fullName || null,
       patientEmail: patient?.email || null,
+      prescriptionSnapshot,
       hasControlledDrug: hasControlledDrug(order),
       verificationStatus:
         order.verificationStatus || (order.pharmacyVerification?.verified ? "verified" : "unverified"),

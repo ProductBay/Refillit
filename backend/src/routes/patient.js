@@ -2209,6 +2209,16 @@ router.post("/orders", requireAuth, requireRoles(["patient"]), async (req, res) 
     paymentMethod: paymentIntent.method || null,
     paymentCurrency: paymentIntent.currency || "JMD",
     paymentAmount: toMoney(paymentIntent.totalAmount || 0),
+    prescriptionSnapshot: {
+      id: prescription.id,
+      doctorId: prescription.doctorId || null,
+      doctorName: prescription.doctorName || null,
+      patientId: prescription.patientId || null,
+      patientFullName: prescription.patientFullName || null,
+      meds: Array.isArray(prescription.meds) ? prescription.meds : [],
+      allowedRefills: Number(prescription.allowedRefills || 0),
+      expiryDate: prescription.expiryDate || null,
+    },
     deliveryAddressSnapshot: addressSnapshot,
     deliveryPreferences: {
       instructions: String(body.instructions || "").trim() || null,
@@ -2227,6 +2237,12 @@ router.post("/orders", requireAuth, requireRoles(["patient"]), async (req, res) 
     action: "patient.order.create",
     entityType: "order",
     entityId: order.id,
+    metadata: {
+      prescId: prescription.id,
+      doctorId: prescription.doctorId || null,
+      pharmacyId: body.pharmacyId || null,
+      paymentIntentId: paymentIntent.id,
+    },
   });
   if (String(paymentIntent.orderId || "").trim() !== String(order.id || "").trim()) {
     paymentIntent.orderId = order.id;
